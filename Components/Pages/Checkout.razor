@@ -1,0 +1,541 @@
+@page "/cart/checkout"
+@inject PetShop.Services.CartStateService CartState
+@inject PetShop.Services.UserSessionService UserSession
+@inject PetShop.Interfaces.ICheckoutClient CheckoutClient
+@inject PetShop.Interfaces.IPaymentClient PaymentClient
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@implements IDisposable
+
+<PageTitle>Thanh toán</PageTitle>
+
+<div class="checkout-page-wrapper">
+    <TopBar />
+    <PageContextBar Title="Thanh toán" />
+
+    <AuthGuard>
+    <div class="checkout-page">
+        <div class="checkout-container">
+            @if (!loaded)
+            {
+                <LoadingIndicator Message="Đang tải thông tin thanh toán..." />
+            }
+            else if (!UserSession.IsAuthenticated)
+            {
+                <div class="checkout-empty">
+                    <p class="checkout-empty-title">Bạn cần đăng nhập để tiếp tục thanh toán.</p>
+                    <a class="cart-empty-btn" href="/login">Đăng nhập</a>
+                </div>
+            }
+            else if (ItemsToCheckout.Count == 0)
+            {
+                <div class="checkout-empty">
+                    <p class="checkout-empty-title">Không có sản phẩm để thanh toán.</p>
+                    <a class="cart-empty-btn" href="/products">Tiếp tục mua sắm</a>
+                </div>
+            }
+            else
+            {
+                <section class="checkout-section checkout-address-section">
+                    <h2 class="checkout-section-title">
+                        <i class="fas fa-map-marker-alt checkout-section-icon" aria-hidden="true"></i>
+                        Địa chỉ nhận hàng
+                        <span class="checkout-delivery-notice"> (Giao hàng tại Đà Nẵng)</span>
+                    </h2>
+                    <div class="checkout-address-form-grid">
+                        <label class="checkout-field">
+                            <span class="checkout-field-label">Họ và tên<span class="checkout-req">*</span></span>
+                            <input class="checkout-input" id="checkout-fullName" maxlength="100" @bind="form.FullName" @bind:event="oninput" @onblur="@(() => ValidateField(nameof(form.FullName)))" placeholder="Nguyễn Văn A" />
+                            @if (errors.ContainsKey(nameof(form.FullName)))
+                            {
+                                <span class="checkout-field-error">@errors[nameof(form.FullName)]</span>
+                            }
+                        </label>
+                        <label class="checkout-field">
+                            <span class="checkout-field-label">Số điện thoại<span class="checkout-req">*</span></span>
+                            <input class="checkout-input" id="checkout-phone" inputmode="tel" maxlength="20" @bind="form.Phone" @bind:event="oninput" @onblur="@(() => ValidateField(nameof(form.Phone)))" placeholder="0xxxxxxxxx" />
+                            @if (errors.ContainsKey(nameof(form.Phone)))
+                            {
+                                <span class="checkout-field-error">@errors[nameof(form.Phone)]</span>
+                            }
+                        </label>
+                        <label class="checkout-field">
+                            <span class="checkout-field-label">Email</span>
+                            <input class="checkout-input" id="checkout-email" type="email" maxlength="120" @bind="form.Email" @bind:event="oninput" @onblur="@(() => ValidateField(nameof(form.Email)))" placeholder="email@example.com" />
+                            @if (errors.ContainsKey(nameof(form.Email)))
+                            {
+                                <span class="checkout-field-error">@errors[nameof(form.Email)]</span>
+                            }
+                        </label>
+                        <label class="checkout-field">
+                            <span class="checkout-field-label">Tỉnh/Thành phố<span class="checkout-req">*</span></span>
+                            <input class="checkout-input" id="checkout-province" maxlength="60" @bind="form.Province" @bind:event="oninput" @onblur="@(() => ValidateField(nameof(form.Province)))" />
+                            @if (errors.ContainsKey(nameof(form.Province)))
+                            {
+                                <span class="checkout-field-error">@errors[nameof(form.Province)]</span>
+                            }
+                        </label>
+                        <label class="checkout-field">
+                            <span class="checkout-field-label">Quận/Huyện<span class="checkout-req">*</span></span>
+                            <input class="checkout-input" id="checkout-district" list="checkout-district-list" maxlength="60" @bind="form.District" @bind:event="oninput" @onblur="@(() => ValidateField(nameof(form.District)))" placeholder="Quận Hải Châu" />
+                            <datalist id="checkout-district-list">
+                                @foreach (var d in DaNangDistricts)
+                                {
+                                    <option value="@d"></option>
+                                }
+                            </datalist>
+                            @if (errors.ContainsKey(nameof(form.District)))
+                            {
+                                <span class="checkout-field-error">@errors[nameof(form.District)]</span>
+                            }
+                        </label>
+                        <label class="checkout-field">
+                            <span class="checkout-field-label">Phường/Xã<span class="checkout-req">*</span></span>
+                            <input class="checkout-input" id="checkout-ward" list="checkout-ward-list" maxlength="60" @bind="form.Ward" @bind:event="oninput" @onblur="@(() => ValidateField(nameof(form.Ward)))" placeholder="Phường Thạch Thang" />
+                            <datalist id="checkout-ward-list">
+                                @foreach (var w in WardsForSelectedDistrict)
+                                {
+                                    <option value="@w"></option>
+                                }
+                            </datalist>
+                            @if (errors.ContainsKey(nameof(form.Ward)))
+                            {
+                                <span class="checkout-field-error">@errors[nameof(form.Ward)]</span>
+                            }
+                        </label>
+                        <label class="checkout-field checkout-field-wide">
+                            <span class="checkout-field-label">Địa chỉ chi tiết<span class="checkout-req">*</span></span>
+                            <input class="checkout-input" id="checkout-address" maxlength="200" @bind="form.AddressDetail" @bind:event="oninput" @onblur="@(() => ValidateField(nameof(form.AddressDetail)))" placeholder="Số nhà, tên đường" />
+                            @if (errors.ContainsKey(nameof(form.AddressDetail)))
+                            {
+                                <span class="checkout-field-error">@errors[nameof(form.AddressDetail)]</span>
+                            }
+                        </label>
+                    </div>
+                    <p class="checkout-address-summary">
+                        Địa chỉ giao hàng đầy đủ:
+                        <strong>@(BuildFullAddress().Length > 0 ? BuildFullAddress() : "(chưa đủ thông tin)")</strong>
+                    </p>
+                </section>
+
+                <section class="checkout-section checkout-products-section">
+                    <h2 class="checkout-section-title">Sản phẩm</h2>
+                    <div class="checkout-products-table">
+                        <div class="checkout-table-header">
+                            <span class="col-product">Sản phẩm</span>
+                            <span class="col-price">Đơn giá</span>
+                            <span class="col-qty">Số lượng</span>
+                            <span class="col-total">Thành tiền</span>
+                        </div>
+                        @foreach (var item in ItemsToCheckout)
+                        {
+                            <div class="checkout-table-row">
+                                <div class="col-product">
+                                    <div class="checkout-product-image">
+                                        @if (!string.IsNullOrWhiteSpace(item.ImageUrl))
+                                        {
+                                            <img src="@item.ImageUrl" alt="@item.Name" />
+                                        }
+                                        else
+                                        {
+                                            <div class="checkout-product-no-image"></div>
+                                        }
+                                    </div>
+                                    <span class="checkout-product-name">@item.Name</span>
+                                </div>
+                                <span class="col-price">@FormatPrice(item.Price)</span>
+                                <span class="col-qty">@item.Quantity</span>
+                                <span class="col-total checkout-product-total">@FormatPrice(item.Price * item.Quantity)</span>
+                            </div>
+                        }
+                    </div>
+                </section>
+
+                <section class="checkout-section checkout-payment-section">
+                    <h2 class="checkout-section-title">Phương thức thanh toán</h2>
+                    <div class="checkout-payment-options">
+                        <label class="checkout-payment-option @(form.PaymentMethod == "COD" ? "active" : null)">
+                            <input id="checkout-payment-cod" type="radio" name="paymentMethod" value="COD" checked="@(form.PaymentMethod == "COD")" @onchange="@(() => SelectPayment("COD"))" disabled="@isSubmitting" />
+                            <span>Thanh toán khi nhận hàng (COD)</span>
+                        </label>
+                        <label class="checkout-payment-option @(form.PaymentMethod == "PayOS" ? "active" : null)">
+                            <input id="checkout-payment-payos" type="radio" name="paymentMethod" value="PayOS" checked="@(form.PaymentMethod == "PayOS")" @onchange="@(() => SelectPayment("PayOS"))" disabled="@isSubmitting" />
+                            <span>Thanh toán online (PayOS)</span>
+                        </label>
+                    </div>
+                </section>
+
+                <section class="checkout-section checkout-message-section">
+                    <label class="checkout-message-label" for="checkout-note">Lời nhắn:</label>
+                    <input id="checkout-note" type="text" maxlength="500" placeholder="Lưu ý cho Người bán..." class="checkout-input checkout-message-input" @bind="form.Note" @bind:event="oninput" disabled="@isSubmitting" />
+                </section>
+
+                <section class="checkout-section checkout-summary-section">
+                    <h2 class="checkout-section-title">Tóm tắt đơn hàng</h2>
+                    <div class="checkout-summary-list">
+                        <div class="checkout-summary-row">
+                            <span>Tạm tính (@ItemsToCheckout.Sum(i => i.Quantity) sản phẩm)</span>
+                            <strong>@FormatPrice(ItemsToCheckout.Sum(i => i.Price * i.Quantity))</strong>
+                        </div>
+                        <div class="checkout-summary-row">
+                            <span>Phí vận chuyển</span>
+                            <strong>Miễn phí</strong>
+                        </div>
+                        <div class="checkout-summary-row checkout-total">
+                            <span>Tổng cộng</span>
+                            <strong>@FormatPrice(ItemsToCheckout.Sum(i => i.Price * i.Quantity))</strong>
+                        </div>
+                    </div>
+                    <button id="checkout-submit" type="button" class="checkout-place-btn" disabled="@(!CanSubmit())" @onclick="SubmitAsync">
+                        @SubmitButtonLabel
+                    </button>
+                    <p class="checkout-terms">
+                        Nhấn "Đặt hàng" đồng nghĩa với việc bạn đồng ý tuân theo điều khoản của chúng tôi.
+                        Tổng tiền cuối cùng sẽ được backend xác minh khi tạo đơn hàng.
+                    </p>
+                </section>
+
+                @if (!string.IsNullOrWhiteSpace(error))
+                {
+                    <div class="auth-error" role="alert">@error</div>
+                }
+            }
+        </div>
+    </div>
+    </AuthGuard>
+
+    <Footer />
+</div>
+
+@code {
+    private static readonly IReadOnlyList<string> DaNangDistricts = new[]
+    {
+        "Quận Hải Châu",
+        "Quận Thanh Khê",
+        "Quận Sơn Trà",
+        "Quận Ngũ Hành Sơn",
+        "Quận Liên Chiểu",
+        "Quận Cẩm Lệ",
+        "Huyện Hòa Vang",
+        "Huyện Hoàng Sa",
+    };
+
+    private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> DaNangWardsByDistrict =
+        new Dictionary<string, IReadOnlyList<string>>
+        {
+            ["Quận Hải Châu"] = new[] { "Phường Thạch Thang", "Phường Hải Châu I", "Phường Hải Châu II", "Phường Phước Ninh", "Phường Hùng Vương", "Phường Chính Gián", "Phường Vĩnh Trung", "Phường Thanh Bình", "Phường Thuận Phước", "Phường Thủy Thuỷ", "Phường Hòa Cường Bắc", "Phường Hòa Cường Nam", "Phường Nam Dương", "Phường Ong Ích Khiêm" },
+            ["Quận Thanh Khê"] = new[] { "Phường An Xuân", "Phường Tam Thuận", "Phường Thanh Khê Tây", "Phường Thanh Khê Đông", "Phường Kim Ly", "Phường Hòa Khê", "Phường Xuân Hà", "Phường Tân Chính", "Phường Bình Hiên", "Phường Bình Thuận" },
+            ["Quận Sơn Trà"] = new[] { "Phường Thọ Quang", "Phường Mân Thái", "Phường Nại Hiên Đông", "Phường Phước Mỹ", "Phường An Hải Bắc", "Phường An Hải Nam", "Phường An Hải Tây", "Phường Mỹ An", "Phường Khuê Trung" },
+            ["Quận Ngũ Hành Sơn"] = new[] { "Phường Mỹ An", "Phường Khuê Mỹ", "Phường Hoà Quý", "Phường Hoà Hải", "Phường Khuê Trung" },
+            ["Quận Liên Chiểu"] = new[] { "Phường Hòa Khánh Bắc", "Phường Hòa Khánh Nam", "Phường Hòa Minh", "Phường Hòa Bắc", "Phường Hòa Liên", "Phường Hòa Nhơn" },
+            ["Quận Cẩm Lệ"] = new[] { "Phường Hòa An", "Phường Hòa Phát", "Phường Khuê Trung", "Phường Hòa Quý", "Phường Hòa Khê", "Phường Khuê Mỹ", "Phường An Lạc" },
+            ["Huyện Hòa Vang"] = new[] { "Phường Hòa Phước", "Phường Hòa Sơn", "Phường Hòa Tiến", "Phường Hòa Khương", "Phường Hòa Phong", "Phường Hòa Ninh", "Phường Hòa Phú", "Phường Hòa Bắc", "Phường Hòa Liên", "Phường Hòa Nhơn", "Phường Hòa Bình", "Phường Hòa Thọ Bắc", "Phường Hòa Thọ Đông", "Phường Hòa Thọ Nam" },
+            ["Huyện Hoàng Sa"] = Array.Empty<string>(),
+        };
+
+    private readonly CheckoutForm form = new();
+    private readonly Dictionary<string, string> errors = new();
+    private bool loaded;
+    private bool isSubmitting;
+    private string? error;
+    private IReadOnlyList<PetShop.Models.FrontendCartItem> ItemsToCheckout { get; set; } = Array.Empty<PetShop.Models.FrontendCartItem>();
+
+    private IReadOnlyList<string> WardsForSelectedDistrict =>
+        DaNangWardsByDistrict.TryGetValue(form.District, out var list) ? list : Array.Empty<string>();
+
+    private string SubmitButtonLabel
+    {
+        get
+        {
+            if (isSubmitting)
+            {
+                return form.PaymentMethod == "PayOS" ? "Đang tạo link thanh toán..." : "Đang xử lý...";
+            }
+            return "Đặt hàng";
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            CartState.Changed += HandleCartChanged;
+            UserSession.Changed += HandleSessionChanged;
+
+            try { await CartState.LoadAsync(); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Checkout.razor] CartState.LoadAsync threw: {ex.GetType().Name}"); }
+            try { await UserSession.LoadAsync(); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Checkout.razor] UserSession.LoadAsync threw: {ex.GetType().Name}"); }
+
+            // FIX: Đọc sessionStorage trước — Cart.razor đã lưu selected items vào đây.
+            // Fallback về CartState.Items nếu sessionStorage rỗng (navigation trực tiếp hoặc hard-refresh).
+            ItemsToCheckout = await LoadItemsFromSessionAsync();
+
+            if (string.IsNullOrWhiteSpace(form.FullName))
+            {
+                form.FullName = UserSession.CurrentUser?.Name ?? string.Empty;
+            }
+            if (string.IsNullOrWhiteSpace(form.Email))
+            {
+                form.Email = UserSession.CurrentUser?.Email ?? string.Empty;
+            }
+            if (string.IsNullOrWhiteSpace(form.Province))
+            {
+                form.Province = "Đà Nẵng";
+            }
+            loaded = true;
+            StateHasChanged();
+        }
+    }
+
+    private async Task<IReadOnlyList<PetShop.Models.FrontendCartItem>> LoadItemsFromSessionAsync()
+    {
+        try
+        {
+            var raw = await JS.InvokeAsync<string?>("sessionStorage.getItem", "checkoutItems");
+            if (!string.IsNullOrWhiteSpace(raw))
+            {
+                var items = System.Text.Json.JsonSerializer.Deserialize<List<CheckoutStorageItem>>(raw);
+                if (items is not null && items.Count > 0)
+                {
+                    return items.Select(i => new PetShop.Models.FrontendCartItem(
+                        i.ProductId, i.Name, i.Price, i.Quantity,
+                        i.ImageUrl ?? "", 0)).ToList();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[Checkout.razor] LoadItemsFromSessionAsync threw: {ex.GetType().Name} {ex.Message}");
+        }
+
+        // Fallback: lấy toàn bộ giỏ hàng nếu không có sessionStorage (edge case: refresh trang checkout)
+        return CartState.Items.ToList();
+    }
+
+    private sealed record CheckoutStorageItem(int ProductId, string Name, decimal Price, string? ImageUrl, int Quantity);
+
+    private void SelectPayment(string method) => form.PaymentMethod = method;
+
+    private bool CanSubmit() => !isSubmitting && loaded && ItemsToCheckout.Count > 0 && UserSession.IsAuthenticated;
+
+    private void ValidateField(string field)
+    {
+        errors.Remove(field);
+        switch (field)
+        {
+            case nameof(form.FullName):
+                if (string.IsNullOrWhiteSpace(form.FullName))
+                    errors[field] = "Vui lòng nhập họ và tên.";
+                else if (form.FullName.Trim().Length < 2)
+                    errors[field] = "Họ và tên phải có ít nhất 2 ký tự.";
+                else if (form.FullName.Length > 100)
+                    errors[field] = "Họ và tên tối đa 100 ký tự.";
+                break;
+            case nameof(form.Phone):
+                if (string.IsNullOrWhiteSpace(form.Phone))
+                    errors[field] = "Vui lòng nhập số điện thoại.";
+                else if (!IsValidPhone(form.Phone))
+                    errors[field] = "Số điện thoại phải bắt đầu bằng 0 và có 10-11 chữ số.";
+                break;
+            case nameof(form.Email):
+                if (!string.IsNullOrWhiteSpace(form.Email) && !IsValidEmail(form.Email))
+                    errors[field] = "Email không hợp lệ.";
+                break;
+            case nameof(form.Province):
+                if (string.IsNullOrWhiteSpace(form.Province))
+                    errors[field] = "Vui lòng chọn tỉnh/thành phố.";
+                else if (!string.Equals(form.Province.Trim(), "Đà Nẵng", StringComparison.OrdinalIgnoreCase))
+                    errors[field] = "Hiện tại chỉ hỗ trợ giao hàng tại Đà Nẵng.";
+                break;
+            case nameof(form.District):
+                if (string.IsNullOrWhiteSpace(form.District))
+                    errors[field] = "Vui lòng chọn quận/huyện.";
+                else if (!DaNangDistricts.Contains(form.District))
+                    errors[field] = "Vui lòng chọn quận/huyện từ danh sách.";
+                break;
+            case nameof(form.Ward):
+                if (string.IsNullOrWhiteSpace(form.Ward))
+                    errors[field] = "Vui lòng chọn phường/xã.";
+                else if (!WardsForSelectedDistrict.Contains(form.Ward))
+                    errors[field] = "Phường/xã không hợp lệ cho quận/huyện đã chọn.";
+                break;
+            case nameof(form.AddressDetail):
+                if (string.IsNullOrWhiteSpace(form.AddressDetail))
+                    errors[field] = "Vui lòng nhập địa chỉ chi tiết.";
+                else if (form.AddressDetail.Trim().Length < 5)
+                    errors[field] = "Địa chỉ phải có ít nhất 5 ký tự.";
+                else if (form.AddressDetail.Length > 200)
+                    errors[field] = "Địa chỉ tối đa 200 ký tự.";
+                break;
+        }
+        StateHasChanged();
+    }
+
+    private bool ValidateAll()
+    {
+        foreach (var field in new[] {
+            nameof(form.FullName), nameof(form.Phone), nameof(form.Email),
+            nameof(form.Province), nameof(form.District), nameof(form.Ward),
+            nameof(form.AddressDetail) })
+        {
+            ValidateField(field);
+        }
+        return errors.Count == 0;
+    }
+
+    private string BuildFullAddress()
+    {
+        if (string.IsNullOrWhiteSpace(form.AddressDetail) ||
+            string.IsNullOrWhiteSpace(form.Ward) ||
+            string.IsNullOrWhiteSpace(form.District) ||
+            string.IsNullOrWhiteSpace(form.Province))
+        {
+            return string.Empty;
+        }
+        return $"{form.AddressDetail.Trim()}, {form.Ward.Trim()}, {form.District.Trim()}, {form.Province.Trim()}";
+    }
+
+    private async Task SubmitAsync()
+    {
+        error = null;
+
+        if (!UserSession.IsAuthenticated || UserSession.CurrentUser is null)
+        {
+            error = "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.";
+            Navigation.NavigateTo("/login", forceLoad: true);
+            return;
+        }
+
+        if (ItemsToCheckout.Count == 0)
+        {
+            error = "Giỏ hàng trống. Vui lòng thêm sản phẩm trước khi thanh toán.";
+            return;
+        }
+
+        if (!ValidateAll())
+        {
+            error = "Vui lòng kiểm tra lại các trường được đánh dấu.";
+            return;
+        }
+
+        if (!CanSubmit())
+        {
+            return;
+        }
+
+        // Guard against accidental double submit. The backend also has no
+        // idempotency token today; this client-side guard prevents the most
+        // common user double-click. See PHASE 7 red-team row.
+        if (isSubmitting)
+        {
+            return;
+        }
+
+        isSubmitting = true;
+
+        var fullAddress = BuildFullAddress();
+        var request = new PetShop.Models.FrontendCheckoutRequest(
+            UserSession.CurrentUser.UserId,
+            UserSession.CurrentUser.Email,
+            form.FullName.Trim(),
+            fullAddress,
+            form.PaymentMethod,
+            ItemsToCheckout.Select(item => new PetShop.Models.FrontendCheckoutItem(item.ProductId, item.Name, item.Quantity, item.Price)).ToList(),
+            Navigation.ToAbsoluteUri("/checkout/invoice?payos=success").ToString(),
+            Navigation.ToAbsoluteUri("/checkout/invoice?payos=cancel").ToString());
+
+        var result = await CheckoutClient.CheckoutAsync(request);
+        isSubmitting = false;
+
+        if (!result.IsSuccess || result.Data is null)
+        {
+            error = FormatBackendError(result.StatusCode, result.Error);
+            // Cart is intentionally NOT cleared on failure.
+            return;
+        }
+
+        if (string.Equals(result.Data.PaymentMethod, "PayOS", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(result.Data.RedirectUrl))
+        {
+            // Save pending order to localStorage so checkout/invoice can retrieve it after PayOS redirect.
+            var payosTotal = ItemsToCheckout.Sum(i => i.Price * i.Quantity);
+            var orderCodeVal = int.TryParse(result.Data.OrderCode, out var oc) ? oc : 0;
+            var pendingOrder = new PendingOrderInfo(result.Data.OrderId, orderCodeVal, payosTotal);
+            await JS.InvokeVoidAsync("localStorage.setItem", "pendingPayOSOrder", System.Text.Json.JsonSerializer.Serialize(pendingOrder));
+
+            // Navigation is a hard reload so the user lands on the PayOS checkout page.
+            Navigation.NavigateTo(result.Data.RedirectUrl, forceLoad: true);
+            return;
+        }
+
+        // COD: backend has accepted the order.
+        // Save order info to localStorage for the cod-success confirmation page,
+        // then clear the cart and redirect to /checkout/cod-success.
+        var orderTotal = ItemsToCheckout.Sum(i => i.Price * i.Quantity);
+        var codOrderCode = int.TryParse(result.Data.OrderCode, out var codOc) ? codOc : 0;
+        var lastCodOrder = new LastCodOrderInfo(
+            result.Data.OrderId,
+            codOrderCode,
+            form.FullName,
+            form.Phone,
+            BuildFullAddress(),
+            orderTotal);
+        await JS.InvokeVoidAsync("localStorage.setItem",
+            "lastCodOrder",
+            System.Text.Json.JsonSerializer.Serialize(lastCodOrder));
+        await CartState.ClearAsync();
+        Navigation.NavigateTo("/checkout/cod-success", forceLoad: true);
+    }
+
+    private sealed record PendingOrderInfo(int orderId, int orderCode, decimal totalAmount);
+    private sealed record LastCodOrderInfo(int orderId, int orderCode, string fullName, string phone, string address, decimal totalAmount);
+
+    private static string FormatBackendError(int? statusCode, string? raw)
+    {
+        var detail = string.IsNullOrWhiteSpace(raw) ? "Vui lòng thử lại." : raw;
+        return statusCode switch
+        {
+            400 => $"Đơn hàng chưa hợp lệ: {detail}",
+            401 => "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
+            403 => "Bạn không có quyền đặt đơn hàng này.",
+            404 => "Không tìm thấy sản phẩm hoặc tài nguyên. Vui lòng tải lại trang.",
+            409 => $"Xung đột đơn hàng: {detail}",
+            500 or 502 or 503 or 504 => "Máy chủ đang gặp sự cố. Vui lòng thử lại sau vài phút.",
+            _ => $"Thanh toán thất bại: {detail}",
+        };
+    }
+
+    private static bool IsValidPhone(string phone)
+    {
+        var clean = (phone ?? string.Empty).Replace(" ", string.Empty);
+        return System.Text.RegularExpressions.Regex.IsMatch(clean, @"^0[0-9]{9,10}$");
+    }
+
+    private static bool IsValidEmail(string email)
+    {
+        return System.Text.RegularExpressions.Regex.IsMatch(email ?? string.Empty, @"^[^\s@]+@[^\s@]+\.[^\s@]+$");
+    }
+
+    private void HandleCartChanged() => InvokeAsync(StateHasChanged);
+    private void HandleSessionChanged() => InvokeAsync(StateHasChanged);
+
+    private static string FormatPrice(decimal value) =>
+        string.Create(System.Globalization.CultureInfo.GetCultureInfo("vi-VN"), $"{value:C0}");
+
+    public void Dispose()
+    {
+        CartState.Changed -= HandleCartChanged;
+        UserSession.Changed -= HandleSessionChanged;
+    }
+
+    private sealed class CheckoutForm
+    {
+        public string FullName { get; set; } = string.Empty;
+        public string Phone { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string Province { get; set; } = string.Empty;
+        public string District { get; set; } = string.Empty;
+        public string Ward { get; set; } = string.Empty;
+        public string AddressDetail { get; set; } = string.Empty;
+        public string PaymentMethod { get; set; } = "COD";
+        public string Note { get; set; } = string.Empty;
+    }
+}

@@ -1,0 +1,46 @@
+@inject NavigationManager NavigationManager
+
+<nav class="navigation">
+    <div class="container">
+        <ul class="nav-list">
+            @foreach (var item in NavItems)
+            {
+                <li class="nav-item">
+                    <a href="@item.To" class="nav-link" @onclick="args => HandleNavClickAsync(args, item)" @onclick:preventDefault="@(item.To == "/#featured-products" && IsHome)">
+                        <span class="nav-icon" aria-hidden="true"><i class="@item.Icon"></i></span>
+                        <span class="nav-text">@item.Name</span>
+                    </a>
+                </li>
+            }
+        </ul>
+    </div>
+</nav>
+
+@code {
+    private bool IsHome => new Uri(NavigationManager.Uri).AbsolutePath == "/";
+
+    private static readonly NavItem[] NavItems =
+    {
+        new("Trang chủ", "/", "fas fa-home"),
+        new("Sản phẩm", "/#featured-products", "fas fa-baseball-ball"),
+        new("Dịch vụ chăm sóc", "/services", "fas fa-th-large"),
+        new("Boarding Room", "/boarding", "fas fa-hotel"),
+        new("Giới thiệu", "/about", "fas fa-book-open"),
+        new("Liên hệ", "/contact", "fas fa-phone-alt"),
+        new("Blog", "/blog", "fas fa-blog")
+    };
+
+    private async Task HandleNavClickAsync(MouseEventArgs args, NavItem item)
+    {
+        if (item.To == "/#featured-products" && IsHome)
+        {
+            await Task.CompletedTask;
+            NavigationManager.NavigateTo("/#featured-products");
+            return;
+        }
+
+        NavigationManager.NavigateTo(item.To);
+    }
+
+    private sealed record NavItem(string Name, string To, string Icon);
+}

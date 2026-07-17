@@ -1,0 +1,134 @@
+@implements IDisposable
+
+<section class="hero-banner">
+    <div class="hero-carousel-viewport">
+        <button type="button" class="hero-carousel-btn hero-carousel-btn--prev" @onclick="GoPrev" aria-label="Slide trước">
+            <i class="fas fa-chevron-left" aria-hidden="true"></i>
+        </button>
+        <button type="button" class="hero-carousel-btn hero-carousel-btn--next" @onclick="GoNext" aria-label="Slide sau">
+            <i class="fas fa-chevron-right" aria-hidden="true"></i>
+        </button>
+
+        <div class="hero-carousel-track" style="transform: translateX(-@(activeIndex * 100)%);">
+            <div class="hero-slide">
+                <div class="hero-image-wrapper">
+                    <img src="https://img.freepik.com/free-photo/adorable-white-little-puppy_23-2148985894.jpg?semt=ais_hybrid&w=740&q=80"
+                         alt="Happy pets playing with toys"
+                         class="hero-image"
+                         loading="eager" />
+                </div>
+                <div class="container">
+                    <div class="hero-content">
+                        <div class="hero-text">
+                            <h1 class="hero-title">Thế giới đồ chơi <span class="highlight">cho thú cưng</span></h1>
+                            <p class="hero-description">
+                                Hơn 1000+ món đồ chơi chất lượng, an toàn cho bé cưng của bạn.
+                                Từ đồ chơi thông minh đến đồ chơi vận động, tất cả đều có tại Pet Toy Shop!
+                            </p>
+                            <div class="hero-stats">
+                                <div class="stat-item"><span class="stat-number">1000+</span><span class="stat-label">Sản phẩm</span></div>
+                                <div class="stat-item"><span class="stat-number">5000+</span><span class="stat-label">Khách hàng</span></div>
+                                <div class="stat-item"><span class="stat-number">100%</span><span class="stat-label">An toàn</span></div>
+                            </div>
+                            <a class="hero-cta" href="/#featured-products">
+                                Khám phá ngay
+                                <i class="fas fa-bullseye cta-icon" aria-hidden="true"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="hero-slide">
+                <div class="hero-image-wrapper">
+                    <img src="https://img.freepik.com/premium-photo/dog-wearing-sunglasses-with-pink-background_1018448-16032.jpg?semt=ais_hybrid&w=740&q=80"
+                         alt="Pet shop deals"
+                         class="hero-image" />
+                </div>
+                <div class="container">
+                    <div class="hero-content">
+                        <div class="hero-text">
+                            <h1 class="hero-title">Đồ chơi thông minh <span class="highlight">giao hàng nhanh</span></h1>
+                            <p class="hero-description hero-description--plain">Chọn quà cho thú cưng - giao tận nơi, đổi trả dễ dàng.</p>
+                            <p class="hero-offer-label">Ưuài cuối tuần</p>
+                            <div class="hero-price-row">
+                                <span class="hero-price-current">Miễn phí ship</span>
+                                <span class="hero-price-old">từ 300k</span>
+                            </div>
+                            <div class="hero-stats">
+                                <div class="stat-item"><span class="stat-number">1000+</span><span class="stat-label">Sản phẩm</span></div>
+                                <div class="stat-item"><span class="stat-number">5000+</span><span class="stat-label">Khách hàng</span></div>
+                                <div class="stat-item"><span class="stat-number">100%</span><span class="stat-label">An toàn</span></div>
+                            </div>
+                            <a class="hero-cta" href="/#featured-products">
+                                Khám phá ngay
+                                <i class="fas fa-bullseye cta-icon" aria-hidden="true"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="hero-carousel-dots" role="tablist" aria-label="Chọn slide">
+            @for (var i = 0; i < SlideCount; i++)
+            {
+                var index = i;
+                <button type="button"
+                        role="tab"
+                        aria-selected="@(index == activeIndex)"
+                        class="hero-carousel-dot@(index == activeIndex ? " is-active" : string.Empty)"
+                        @onclick="() => SetSlide(index)"
+                        aria-label="Slide @(index + 1)"></button>
+            }
+        </div>
+    </div>
+</section>
+
+@code {
+    private const int SlideCount = 2;
+    private int activeIndex;
+    private PeriodicTimer? timer;
+    private CancellationTokenSource? timerCancellation;
+
+    protected override void OnInitialized()
+    {
+        timer = new PeriodicTimer(TimeSpan.FromSeconds(6));
+        timerCancellation = new CancellationTokenSource();
+        // Comment out auto-rotation for stable visual testing
+        // _ = RotateAsync(timerCancellation.Token);
+    }
+
+    private async Task RotateAsync(CancellationToken cancellationToken)
+    {
+        if (timer is null)
+        {
+            return;
+        }
+
+        try
+        {
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+            {
+                GoNext();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private void GoPrev() => activeIndex = (activeIndex - 1 + SlideCount) % SlideCount;
+
+    private void GoNext() => activeIndex = (activeIndex + 1) % SlideCount;
+
+    private void SetSlide(int index) => activeIndex = index;
+
+    public void Dispose()
+    {
+        timerCancellation?.Cancel();
+        timerCancellation?.Dispose();
+        timer?.Dispose();
+    }
+}

@@ -1,0 +1,450 @@
+@page "/account/pets"
+@inject PetShop.Services.UserSessionService UserSession
+@inject PetShop.Interfaces.IPetsClient PetsClient
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@using System.Globalization
+@using PetShop.Models
+
+<PageTitle>Thông tin thú cưng</PageTitle>
+
+<div class="home-page">
+    <TopBar />
+    <Header />
+    <Navigation />
+
+    <CustomerOnlyGuard>
+        <main class="profile-page">
+            <div class="container">
+                <section class="profile-card profile-shopee">
+                    <div class="profile-shopee__top">
+                        <div class="profile-shopee__titles">
+                            <h1 class="profile-shopee__h1">Thông tin thú cưng</h1>
+                            <p class="profile-shopee__sub">Quản lý hồ sơ thú cưng dùng cho đặt lịch spa.</p>
+                        </div>
+                        <div class="profile-shopee__actions">
+                            <button type="button" class="profile-shopee-btn profile-shopee-btn--secondary" @onclick="GoProfile">Thông tin cá nhân</button>
+                            <button type="button" class="profile-shopee-btn profile-shopee-btn--ghost" @onclick="GoBack">Quay lại</button>
+                        </div>
+                    </div>
+
+                    <hr class="profile-shopee__rule" />
+
+                    @if (!loaded)
+                    {
+                        <div class="pet-page__loading">Đang tải thông tin thú cưng...</div>
+                    }
+                    else
+                    {
+                        <div class="pet-page__formCard">
+                            <div class="pet-page__formLayout">
+                                <div class="pet-page__formFields">
+                                    <label class="pet-page__fieldRow">
+                                        <span class="pet-page__label">Tên thú cưng</span>
+                                        <input class="pet-page__input"
+                                               value="@petName"
+                                               @oninput="(e) => petName = e.Value?.ToString() ?? string.Empty"
+                                               placeholder="Nhập tên thú cưng" />
+                                    </label>
+
+                                    <label class="pet-page__fieldRow">
+                                        <span class="pet-page__label">Tuổi</span>
+                                        <input class="pet-page__input pet-page__input--short"
+                                               type="number"
+                                               min="0"
+                                               max="60"
+                                               value="@age"
+                                               @oninput="(e) => age = ParseInt(e.Value?.ToString(), age)"
+                                               placeholder="0" />
+                                    </label>
+
+                                    <label class="pet-page__fieldRow">
+                                        <span class="pet-page__label">Giới tính</span>
+                                        <select class="pet-page__select" value="@gender" @onchange="(e) => gender = e.Value?.ToString() ?? string.Empty">
+                                            <option value="">Chọn giới tính</option>
+                                            <option value="male">Đực</option>
+                                            <option value="female">Cái</option>
+                                        </select>
+                                    </label>
+
+                                    <label class="pet-page__fieldRow">
+                                        <span class="pet-page__label">Cân nặng</span>
+                                        <input class="pet-page__input pet-page__input--short"
+                                               type="number"
+                                               min="0"
+                                               step="0.1"
+                                               value="@weightText"
+                                               @oninput="(e) => weightText = e.Value?.ToString() ?? string.Empty"
+                                               placeholder="kg" />
+                                    </label>
+
+                                    <label class="pet-page__fieldRow">
+                                        <span class="pet-page__label">Loài</span>
+                                        <select class="pet-page__select" value="@speciesId" @onchange="OnSpeciesChanged">
+                                            <option value="">Chọn loài</option>
+                                            @foreach (var species in speciesOptions)
+                                            {
+                                                <option value="@species.SpeciesId">@species.SpeciesName</option>
+                                            }
+                                        </select>
+                                    </label>
+
+                                    <label class="pet-page__fieldRow">
+                                        <span class="pet-page__label">Giống</span>
+                                        <select class="pet-page__select" value="@breedId" @onchange="(e) => breedId = ParseNullableInt(e.Value?.ToString())">
+                                            <option value="">Chọn giống</option>
+                                            @foreach (var breed in FilteredBreeds)
+                                            {
+                                                <option value="@breed.BreedId">@breed.BreedName</option>
+                                            }
+                                        </select>
+                                    </label>
+
+                                    <label class="pet-page__fieldRow">
+                                        <span class="pet-page__label">Sức khỏe</span>
+                                        <input class="pet-page__input"
+                                               value="@healthStatus"
+                                               @oninput="(e) => healthStatus = e.Value?.ToString() ?? string.Empty"
+                                               placeholder="Ví dụ: khỏe mạnh, dị ứng..." />
+                                    </label>
+
+                                    <label class="pet-page__fieldRow">
+                                        <span class="pet-page__label">Ảnh</span>
+                                        <div class="pet-page__imageField">
+                                            <input class="pet-page__input pet-page__input--url"
+                                                   value="@imagePath"
+                                                   @oninput="(e) => imagePath = e.Value?.ToString() ?? string.Empty"
+                                                   placeholder="/uploads/pets/..." />
+                                        </div>
+                                    </label>
+
+                                    <label class="pet-page__fieldRow pet-page__fieldRow--span">
+                                        <span class="pet-page__label">Mô tả</span>
+                                        <textarea class="pet-page__input"
+                                                  rows="3"
+                                                  value="@description"
+                                                  @oninput="(e) => description = e.Value?.ToString() ?? string.Empty"
+                                                  placeholder="Ghi chú về tính cách, thói quen, yêu cầu chăm sóc..."
+                                                  style="resize:vertical"></textarea>
+                                    </label>
+
+                                    <div class="pet-page__formFooter">
+                                        @if (editingPetId is not null)
+                                        {
+                                            <button type="button" class="profile-shopee-btn profile-shopee-btn--ghost" @onclick="ResetForm">Hủy sửa</button>
+                                        }
+                                        <button type="button" class="profile-shopee-btn profile-shopee-btn--primary" disabled="@saving" @onclick="SavePetAsync">
+                                            @(saving ? "Đang lưu..." : editingPetId is null ? "Thêm thú cưng" : "Lưu thay đổi")
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <aside class="profile-shopee__aside--pet">
+                                    <div class="profile-shopee__avatarRing" aria-hidden="true">
+                                        @if (!string.IsNullOrWhiteSpace(imagePath))
+                                        {
+                                            <img src="@imagePath" alt="" class="profile-shopee__avatarImg" />
+                                        }
+                                        else
+                                        {
+                                            <div class="profile-shopee__avatarFallback">P</div>
+                                        }
+                                    </div>
+                                    <p class="profile-shopee__photoHint">Ảnh thú cưng sẽ hiển thị trong hồ sơ và đặt lịch.</p>
+                                </aside>
+                            </div>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(error))
+                    {
+                        <div class="pet-page__notice pet-page__notice--error">@error</div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(success))
+                    {
+                        <div class="pet-page__notice pet-page__notice--success">@success</div>
+                    }
+
+                    <div class="pet-page__listSection">
+                        <div class="pet-page__listTitle">Danh sách thú cưng</div>
+                        @if (pets.Count == 0)
+                        {
+                            <div class="pet-page__empty">Bạn chưa thêm thú cưng nào.</div>
+                        }
+                        else
+                        {
+                            <div class="pet-page__list">
+                                @foreach (var pet in pets)
+                                {
+                                    <article class="pet-page__item">
+                                        <div class="pet-page__itemImg">
+                                            @if (!string.IsNullOrWhiteSpace(pet.ImagePath))
+                                            {
+                                                <img src="@pet.ImagePath" alt="@pet.PetName" />
+                                            }
+                                            else
+                                            {
+                                                <div class="pet-page__itemImgEmpty">Chưa có ảnh</div>
+                                            }
+                                        </div>
+                                        <div class="pet-page__itemInfo">
+                                            <div class="pet-page__itemName">@pet.PetName</div>
+                                            <div class="pet-page__itemDetail">
+                                                @(DisplayGender(pet.Gender)) · @pet.Age tuổi@(pet.WeightKg.HasValue ? $" · {pet.WeightKg:0.#} kg" : "")
+                                            </div>
+                                            <div class="pet-page__itemMeta">
+                                                @(pet.SpeciesName ?? "Chưa chọn loài") · @(pet.BreedName ?? "Chưa chọn giống")
+                                            </div>
+                                            @if (!string.IsNullOrWhiteSpace(pet.HealthStatus))
+                                            {
+                                                <div class="pet-page__itemMeta">Sức khỏe: @pet.HealthStatus</div>
+                                            }
+                                            <div class="pet-page__itemActions">
+                                                <button type="button" class="profile-shopee-btn profile-shopee-btn--secondary" @onclick="() => EditPet(pet)">Sửa</button>
+                                                <button type="button" class="profile-shopee-btn profile-shopee-btn--danger" @onclick="() => DeletePetAsync(pet)">Xóa</button>
+                                            </div>
+                                        </div>
+                                    </article>
+                                }
+                            </div>
+                        }
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <Footer />
+    </CustomerOnlyGuard>
+</div>
+
+@code {
+    private bool loaded;
+    private bool pendingLoad = true;
+    private bool saving;
+    private string? error;
+    private string? success;
+    private List<PetManageDto> pets = new();
+    private List<SpeciesOptionDto> speciesOptions = new();
+    private List<BreedOptionDto> breedOptions = new();
+    private int? editingPetId;
+    private string petName = "";
+    private int age;
+    private string gender = "";
+    private string weightText = "";
+    private int? speciesId;
+    private int? breedId;
+    private string healthStatus = "";
+    private string imagePath = "";
+    private string description = "";
+
+    private IEnumerable<BreedOptionDto> FilteredBreeds =>
+        speciesId.HasValue ? breedOptions.Where(b => b.SpeciesId == speciesId.Value) : breedOptions;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!pendingLoad)
+        {
+            return;
+        }
+
+        pendingLoad = false;
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        error = null;
+        success = null;
+        await UserSession.LoadAsync();
+        var customerId = UserSession.CurrentUser?.UserId ?? 0;
+        if (customerId <= 0)
+        {
+            loaded = true;
+            return;
+        }
+
+        var speciesResult = await PetsClient.GetSpeciesAsync();
+        if (speciesResult.IsSuccess)
+        {
+            speciesOptions = speciesResult.Data?.ToList() ?? new();
+        }
+
+        var breedsResult = await PetsClient.GetBreedsAsync();
+        if (breedsResult.IsSuccess)
+        {
+            breedOptions = breedsResult.Data?.ToList() ?? new();
+        }
+
+        var petsResult = await PetsClient.GetManageAsync(customerId);
+        if (petsResult.IsSuccess)
+        {
+            pets = petsResult.Data?.ToList() ?? new();
+        }
+        else
+        {
+            error = petsResult.Error ?? "Không tải được danh sách thú cưng.";
+        }
+
+        loaded = true;
+    }
+
+    private async Task SavePetAsync()
+    {
+        var customerId = UserSession.CurrentUser?.UserId ?? 0;
+        if (customerId <= 0)
+        {
+            Navigation.NavigateTo("/login", forceLoad: true);
+            return;
+        }
+
+        error = null;
+        success = null;
+        if (string.IsNullOrWhiteSpace(petName))
+        {
+            error = "Tên thú cưng là bắt buộc.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(gender))
+        {
+            error = "Vui lòng chọn giới tính.";
+            return;
+        }
+
+        var weight = ParseNullableDecimal(weightText);
+        var request = new UpsertPetRequestDto(
+            customerId,
+            petName.Trim(),
+            Math.Clamp(age, 0, 60),
+            gender,
+            weight,
+            EmptyToNull(description),
+            EmptyToNull(healthStatus),
+            EmptyToNull(imagePath),
+            breedId);
+
+        saving = true;
+        try
+        {
+            FrontendApiResult<PetManageDto> result = editingPetId is int id
+                ? await PetsClient.UpdateAsync(id, request)
+                : await PetsClient.CreateAsync(request);
+
+            if (!result.IsSuccess)
+            {
+                error = result.Error ?? "Không lưu được thú cưng.";
+                return;
+            }
+
+            success = editingPetId is null ? "Đã thêm thú cưng." : "Đã cập nhật thú cưng.";
+            ResetForm();
+            var petsResult = await PetsClient.GetManageAsync(customerId);
+            if (petsResult.IsSuccess)
+            {
+                pets = petsResult.Data?.ToList() ?? new();
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task DeletePetAsync(PetManageDto pet)
+    {
+        var customerId = UserSession.CurrentUser?.UserId ?? 0;
+        if (customerId <= 0)
+        {
+            return;
+        }
+
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Xóa hồ sơ của {pet.PetName}?");
+        if (!confirmed)
+        {
+            return;
+        }
+
+        error = null;
+        success = null;
+        var result = await PetsClient.DeleteAsync(pet.Id, customerId);
+        if (!result.IsSuccess)
+        {
+            error = result.Error ?? "Không xóa được thú cưng.";
+            return;
+        }
+
+        success = "Đã xóa thú cưng.";
+        pets.RemoveAll(p => p.Id == pet.Id);
+        if (editingPetId == pet.Id)
+        {
+            ResetForm();
+        }
+    }
+
+    private void EditPet(PetManageDto pet)
+    {
+        editingPetId = pet.Id;
+        petName = pet.PetName;
+        age = pet.Age;
+        gender = pet.Gender;
+        weightText = pet.WeightKg?.ToString("0.#", CultureInfo.InvariantCulture) ?? "";
+        speciesId = pet.SpeciesId;
+        breedId = pet.BreedId;
+        healthStatus = pet.HealthStatus ?? "";
+        imagePath = pet.ImagePath ?? "";
+        description = pet.Description ?? "";
+        success = null;
+        error = null;
+    }
+
+    private void ResetForm()
+    {
+        editingPetId = null;
+        petName = "";
+        age = 0;
+        gender = "";
+        weightText = "";
+        speciesId = null;
+        breedId = null;
+        healthStatus = "";
+        imagePath = "";
+        description = "";
+    }
+
+    private void OnSpeciesChanged(ChangeEventArgs e)
+    {
+        speciesId = ParseNullableInt(e.Value?.ToString());
+        if (breedId.HasValue && FilteredBreeds.All(b => b.BreedId != breedId.Value))
+        {
+            breedId = null;
+        }
+    }
+
+    private void GoProfile() => Navigation.NavigateTo("/account");
+
+    private void GoBack() => Navigation.NavigateTo("/account");
+
+    private static int ParseInt(string? value, int fallback) =>
+        int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : fallback;
+
+    private static int? ParseNullableInt(string? value) =>
+        int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : null;
+
+    private static decimal? ParseNullableDecimal(string? value) =>
+        decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed) ? parsed : null;
+
+    private static string? EmptyToNull(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string DisplayGender(string? value)
+    {
+        var normalized = (value ?? "").Trim().ToLowerInvariant();
+        return normalized switch
+        {
+            "male" or "đực" or "duc" => "Đực",
+            "female" or "cái" or "cai" => "Cái",
+            _ => "Chưa rõ",
+        };
+    }
+}

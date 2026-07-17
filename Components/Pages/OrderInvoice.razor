@@ -1,0 +1,509 @@
+@page "/checkout/invoice"
+@page "/order-invoice"
+@inject PetShop.Interfaces.IOrderClient OrderClient
+@inject PetShop.Interfaces.IPaymentClient PaymentClient
+@inject PetShop.Services.CartStateService CartState
+@inject PetShop.Services.UserSessionService UserSession
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Hóa đơn đơn hàng – Pet Toy Shop</PageTitle>
+
+<div class="home-page spa-invoice-page order-invoice-page">
+    <TopBar />
+    <PageContextBar Title="Hóa đơn đơn hàng" />
+
+    <AuthGuard>
+    <main class="spa-invoice-page__main">
+        @if (isLoading)
+        {
+            <div class="spa-invoice__loading">
+                <div class="spa-invoice__spinner"></div>
+                <p>Đang tải hóa đơn...</p>
+            </div>
+        }
+        else if (!string.IsNullOrWhiteSpace(error))
+        {
+            <div class="spa-invoice__error-state">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="1.5">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <p>@error</p>
+                <a class="spa-invoice-btn spa-invoice-btn--outline" href="/cart">
+                    Quay lại giỏ hàng
+                </a>
+            </div>
+        }
+        else if (order is not null)
+        {
+            var isPaid = paymentState == InvoicePaymentState.Paid;
+            var isCancel = paymentState == InvoicePaymentState.Cancelled;
+            var isPending = paymentState == InvoicePaymentState.Pending;
+            var statusLabel = GetStatusLabel();
+            var statusClass = GetStatusClass();
+            var createdDate = order.OrderDate.ToString("dd/MM/yyyy HH:mm");
+            var subtotal = order.Items.Sum(i => i.UnitPrice * i.Quantity);
+            var displayTotal = order.TotalAmount > 0 ? order.TotalAmount : subtotal;
+
+            <article class="spa-invoice-card @(isCancel ? "spa-invoice-card--cancel" : "")">
+                <div class="spa-invoice-card__header">
+                    <div class="spa-invoice-card__header-left">
+                        <div class="spa-invoice-card__brand">
+                            <div class="spa-invoice-card__brand-icon">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
+                                    <path d="M3 6h18" />
+                                    <path d="M16 10a4 4 0 0 1-8 0" />
+                                </svg>
+                            </div>
+                            <div>
+                                <span class="spa-invoice-card__brand-name">Pet Toy Shop</span>
+                                <span class="spa-invoice-card__brand-sub">Product Order Invoice</span>
+                            </div>
+                        </div>
+
+                        <div class="spa-invoice-card__meta">
+                            <div class="spa-invoice-card__meta-item">
+                                <span class="spa-invoice-card__meta-label">Ngày đặt</span>
+                                <span class="spa-invoice-card__meta-value">@createdDate</span>
+                            </div>
+                            <div class="spa-invoice-card__meta-item">
+                                <span class="spa-invoice-card__meta-label">Mã đơn hàng</span>
+                                <span class="spa-invoice-card__booking-id">#@order.OrderId</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="spa-invoice-card__status-badge @statusClass">
+                        <span class="spa-invoice-card__status-dot"></span>
+                        <span>@statusLabel</span>
+                    </div>
+                </div>
+
+                @if (isCancel)
+                {
+                    <div class="spa-invoice-card__alert">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="15" y1="9" x2="9" y2="15" />
+                            <line x1="9" y1="9" x2="15" y2="15" />
+                        </svg>
+                        Thanh toán PayOS đã bị hủy. Đơn hàng chưa được xác nhận.
+                    </div>
+                }
+                else if (isPending)
+                {
+                    <div class="spa-invoice-card__alert">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="12" y1="7" x2="12" y2="12" />
+                            <line x1="12" y1="16" x2="12.01" y2="16" />
+                        </svg>
+                        Đơn hàng đang chờ thanh toán PayOS.
+                    </div>
+                }
+
+                <div class="spa-invoice-card__info-grid">
+                    <div class="spa-invoice-card__info-section">
+                        <h3 class="spa-invoice-card__section-title">Thông tin khách hàng</h3>
+                        <div class="spa-invoice-card__info-table">
+                            <div class="spa-invoice-card__info-row">
+                                <span>Khách hàng</span>
+                                <strong>@(UserSession.CurrentUser?.Name ?? "-")</strong>
+                            </div>
+                            <div class="spa-invoice-card__info-row">
+                                <span>Email</span>
+                                <strong>@(UserSession.CurrentUser?.Email ?? "-")</strong>
+                            </div>
+                            <div class="spa-invoice-card__info-row">
+                                <span>Địa chỉ</span>
+                                <strong>@(order.ShippingAddress ?? "-")</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="spa-invoice-card__info-section">
+                        <h3 class="spa-invoice-card__section-title">Thông tin thanh toán</h3>
+                        <div class="spa-invoice-card__info-table">
+                            <div class="spa-invoice-card__info-row">
+                                <span>Phương thức</span>
+                                <strong>@(order.PaymentMethod ?? "PayOS")</strong>
+                            </div>
+                            <div class="spa-invoice-card__info-row">
+                                <span>Trạng thái đơn</span>
+                                <strong>@(order.Status ?? "-")</strong>
+                            </div>
+                            <div class="spa-invoice-card__info-row">
+                                <span>Trạng thái PayOS</span>
+                                <strong>@(payosGatewayStatus ?? order.PaymentStatus ?? "-")</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="spa-invoice-card__services">
+                    <h3 class="spa-invoice-card__section-title">Chi tiết sản phẩm</h3>
+                    <div class="spa-invoice-card__table">
+                        <div class="spa-invoice-card__table-head">
+                            <span>STT</span>
+                            <span>Sản phẩm</span>
+                            <span>Đơn giá</span>
+                            <span>Thành tiền</span>
+                        </div>
+                        @for (int i = 0; i < order.Items.Count; i++)
+                        {
+                            var item = order.Items[i];
+                            var lineTotal = item.UnitPrice * item.Quantity;
+                            <div class="spa-invoice-card__table-row">
+                                <span>@(i + 1)</span>
+                                <span class="spa-invoice-card__service-name">@item.ProductName x @item.Quantity</span>
+                                <span>@PetShop.Components.Shared.Format.Vnd(item.UnitPrice)</span>
+                                <strong>@PetShop.Components.Shared.Format.Vnd(lineTotal)</strong>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="spa-invoice-card__totals">
+                    <div class="spa-invoice-card__total-row spa-invoice-card__total-row--muted">
+                        <span>Tạm tính</span>
+                        <span>@PetShop.Components.Shared.Format.Vnd(displayTotal)</span>
+                    </div>
+                    <div class="spa-invoice-card__total-row spa-invoice-card__total-row--muted">
+                        <span>Phí vận chuyển</span>
+                        <span>Miễn phí</span>
+                    </div>
+                    <div class="spa-invoice-card__grand-total">
+                        <span>Tổng cộng</span>
+                        <strong>@PetShop.Components.Shared.Format.Vnd(displayTotal)</strong>
+                    </div>
+                </div>
+
+                <div class="spa-invoice-card__footer">
+                    @if (isPaid)
+                    {
+                        <p class="spa-invoice-card__thanks">
+                            Cảm ơn quý khách đã đặt hàng tại Pet Toy Shop!
+                        </p>
+                    }
+                    <div class="spa-invoice-card__actions">
+                        @if (isPending && !string.IsNullOrWhiteSpace(checkoutUrl))
+                        {
+                            <button type="button" class="spa-invoice-btn spa-invoice-btn--primary" @onclick="RetryPayment">
+                                Thanh toán ngay
+                            </button>
+                        }
+                        @if (isCancel)
+                        {
+                            <a class="spa-invoice-btn spa-invoice-btn--outline" href="/cart">
+                                Quay lại giỏ hàng
+                            </a>
+                        }
+                        else
+                        {
+                            <a class="spa-invoice-btn spa-invoice-btn--outline" href="/account/orders">
+                                Xem lịch sử đơn hàng
+                            </a>
+                        }
+                        <button type="button" class="spa-invoice-btn spa-invoice-btn--primary" @onclick="PrintInvoice">
+                            In hóa đơn
+                        </button>
+                    </div>
+                </div>
+            </article>
+        }
+    </main>
+    </AuthGuard>
+
+    <Footer />
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "orderId")] private int? OrderId { get; set; }
+    [SupplyParameterFromQuery(Name = "payos")] private string? Payos { get; set; }
+    [SupplyParameterFromQuery(Name = "cancel")] private string? Cancel { get; set; }
+    [SupplyParameterFromQuery(Name = "status")] private string? PayOsStatus { get; set; }
+    [SupplyParameterFromQuery(Name = "orderCode")] private string? PayOsOrderCode { get; set; }
+
+    private FrontendOrderDetail? order;
+    private bool isLoading = true;
+    private string? error;
+    private string? checkoutUrl;
+    private string? payosGatewayStatus;
+    private int resolvedOrderId;
+    private int resolvedOrderCode;
+    private InvoicePaymentState paymentState = InvoicePaymentState.Unknown;
+
+    private int CurrentCustomerId => UserSession.CurrentUser?.UserId ?? 0;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        try { await UserSession.LoadAsync(); }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[OrderInvoice] UserSession.LoadAsync: {ex.Message}");
+        }
+
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        isLoading = true;
+        error = null;
+        StateHasChanged();
+
+        if (CurrentCustomerId <= 0)
+        {
+            error = "Bạn cần đăng nhập để xem hóa đơn.";
+            isLoading = false;
+            StateHasChanged();
+            return;
+        }
+
+        var storage = await ReadStoredOrderAsync("pendingPayOSOrder")
+            ?? await ReadStoredOrderAsync("lastPayOSOrderInvoice");
+
+        resolvedOrderId = OrderId is int queryOrderId && queryOrderId > 0
+            ? queryOrderId
+            : storage?.orderId ?? 0;
+        resolvedOrderCode = ParseOrderCode(PayOsOrderCode)
+            ?? storage?.orderCode ?? 0;
+
+        if (resolvedOrderId <= 0)
+        {
+            error = "Không tìm thấy thông tin đơn hàng PayOS để hiển thị hóa đơn.";
+            isLoading = false;
+            StateHasChanged();
+            return;
+        }
+
+        paymentState = InferStateFromReturnQuery();
+        await SyncPayOSStatusAsync(storage);
+
+        var orderRes = await OrderClient.GetDetailAsync(resolvedOrderId, CurrentCustomerId);
+        if (!orderRes.IsSuccess || orderRes.Data is null)
+        {
+            error = orderRes.StatusCode == 404
+                ? "Không tìm thấy đơn hàng."
+                : orderRes.Error ?? "Không tải được hóa đơn đơn hàng.";
+        }
+        else
+        {
+            order = orderRes.Data;
+            if (paymentState == InvoicePaymentState.Unknown)
+            {
+                paymentState = InferStateFromOrder(order);
+            }
+        }
+
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private async Task SyncPayOSStatusAsync(PayOSOrderStorage? storage)
+    {
+        if (resolvedOrderCode <= 0)
+        {
+            return;
+        }
+
+        var result = await PaymentClient.GetPayOSStatusAsync(resolvedOrderCode);
+        if (!result.IsSuccess || result.Data is null)
+        {
+            if (paymentState != InvoicePaymentState.Cancelled)
+            {
+                error = result.Error ?? "Không thể xác nhận trạng thái thanh toán PayOS.";
+            }
+            else
+            {
+                await PersistLastInvoiceAsync(storage, "cancel");
+                await JS.InvokeVoidAsync("localStorage.removeItem", "pendingPayOSOrder");
+            }
+            return;
+        }
+
+        var data = result.Data;
+        payosGatewayStatus = data.Status;
+        checkoutUrl = data.CheckoutUrl;
+
+        if (data.IsPaid)
+        {
+            paymentState = InvoicePaymentState.Paid;
+            await CartState.ClearAsync();
+            await JS.InvokeVoidAsync("localStorage.removeItem", "checkoutItems");
+            await PersistLastInvoiceAsync(storage, "success");
+            await JS.InvokeVoidAsync("localStorage.removeItem", "pendingPayOSOrder");
+            return;
+        }
+
+        if (IsCancelledStatus(data.Status))
+        {
+            paymentState = InvoicePaymentState.Cancelled;
+            await PersistLastInvoiceAsync(storage, "cancel");
+            await JS.InvokeVoidAsync("localStorage.removeItem", "pendingPayOSOrder");
+            return;
+        }
+
+        if (IsPendingStatus(data.Status))
+        {
+            if (paymentState == InvoicePaymentState.Cancelled)
+            {
+                await PersistLastInvoiceAsync(storage, "cancel");
+                await JS.InvokeVoidAsync("localStorage.removeItem", "pendingPayOSOrder");
+                return;
+            }
+
+            paymentState = InvoicePaymentState.Pending;
+            return;
+        }
+
+        paymentState = InvoicePaymentState.Unknown;
+        error = $"PayOS trả về trạng thái chưa hỗ trợ: {data.Status}.";
+    }
+
+    private async Task<PayOSOrderStorage?> ReadStoredOrderAsync(string key)
+    {
+        try
+        {
+            var raw = await JS.InvokeAsync<string?>("localStorage.getItem", key);
+            if (string.IsNullOrWhiteSpace(raw)) return null;
+            return System.Text.Json.JsonSerializer.Deserialize<PayOSOrderStorage>(raw);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[OrderInvoice] ReadStoredOrderAsync({key}): {ex.Message}");
+            return null;
+        }
+    }
+
+    private async Task PersistLastInvoiceAsync(PayOSOrderStorage? storage, string payosState)
+    {
+        try
+        {
+            var snapshot = new PayOSOrderStorage
+            {
+                orderId = resolvedOrderId,
+                orderCode = resolvedOrderCode,
+                totalAmount = storage?.totalAmount ?? order?.TotalAmount ?? 0m,
+                payos = payosState
+            };
+            var json = System.Text.Json.JsonSerializer.Serialize(snapshot);
+            await JS.InvokeVoidAsync("localStorage.setItem", "lastPayOSOrderInvoice", json);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[OrderInvoice] PersistLastInvoiceAsync: {ex.Message}");
+        }
+    }
+
+    private InvoicePaymentState InferStateFromReturnQuery()
+    {
+        if (string.Equals(Cancel, "true", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(Payos, "cancel", StringComparison.OrdinalIgnoreCase)
+            || IsCancelledStatus(PayOsStatus))
+        {
+            return InvoicePaymentState.Cancelled;
+        }
+
+        return InvoicePaymentState.Unknown;
+    }
+
+    private static InvoicePaymentState InferStateFromOrder(FrontendOrderDetail detail)
+    {
+        if (LooksPaid(detail.PaymentStatus)) return InvoicePaymentState.Paid;
+        if (LooksCancelled(detail.PaymentStatus) || LooksCancelled(detail.Status)) return InvoicePaymentState.Cancelled;
+        if (LooksPending(detail.PaymentStatus) || LooksPending(detail.Status)) return InvoicePaymentState.Pending;
+        return InvoicePaymentState.Unknown;
+    }
+
+    private string GetStatusLabel()
+    {
+        return paymentState switch
+        {
+            InvoicePaymentState.Paid => "Đã thanh toán",
+            InvoicePaymentState.Cancelled => "Đã hủy",
+            InvoicePaymentState.Pending => "Chờ thanh toán",
+            _ => order?.PaymentStatus ?? order?.Status ?? "Chưa rõ"
+        };
+    }
+
+    private string GetStatusClass()
+    {
+        return paymentState switch
+        {
+            InvoicePaymentState.Paid => "is-paid",
+            InvoicePaymentState.Cancelled => "is-cancel",
+            _ => ""
+        };
+    }
+
+    private void RetryPayment()
+    {
+        if (!string.IsNullOrWhiteSpace(checkoutUrl))
+        {
+            Navigation.NavigateTo(checkoutUrl, forceLoad: true);
+        }
+    }
+
+    private async Task PrintInvoice() => await JS.InvokeVoidAsync("window.print");
+
+    private static int? ParseOrderCode(string? value)
+    {
+        return int.TryParse(value, out var code) && code > 0 ? code : null;
+    }
+
+    private static bool IsCancelledStatus(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        var s = value.Trim().ToUpperInvariant();
+        return s is "CANCELLED" or "CANCELED" or "EXPIRED" or "FAILED" or "ERROR" or "CANCEL";
+    }
+
+    private static bool IsPendingStatus(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        return value.Trim().Equals("PENDING", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool LooksPaid(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        var s = value.Trim().ToLowerInvariant();
+        return s.Contains("paid") || s.Contains("đã thanh toán") || s.Contains("da thanh toan");
+    }
+
+    private static bool LooksCancelled(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        var s = value.Trim().ToLowerInvariant();
+        return s.Contains("cancel") || s.Contains("hủy") || s.Contains("huy");
+    }
+
+    private static bool LooksPending(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        var s = value.Trim().ToLowerInvariant();
+        return s.Contains("pending") || s.Contains("chờ thanh toán") || s.Contains("cho thanh toan");
+    }
+
+    private sealed class PayOSOrderStorage
+    {
+        public int orderId { get; set; }
+        public int orderCode { get; set; }
+        public decimal totalAmount { get; set; }
+        public string? payos { get; set; }
+    }
+
+    private enum InvoicePaymentState
+    {
+        Unknown,
+        Pending,
+        Paid,
+        Cancelled
+    }
+}

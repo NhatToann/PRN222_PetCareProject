@@ -1,0 +1,249 @@
+@using PetShop.Models
+@inject PetShop.Services.CartStateService CartState
+@inject PetShop.Services.UserSessionService UserSession
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+@if (Variant == "search")
+{
+    <article class="product-card product-card--search" role="link" tabindex="0" @onclick="GoToDetail" @onkeydown="HandleSearchKeyDown">
+        <div class="product-card--search-media">
+            <img src="@ImageUrl" alt="@Product.Name" class="product-card--search-img" loading="lazy" />
+            @if (DiscountPct is > 0)
+            {
+                <span class="product-card--search-discount-tag">-@DiscountPct%</span>
+            }
+            <span class="product-card--search-rating-float" aria-hidden="true">★ @SearchRating</span>
+            @if (Product.StockQuantity <= 0)
+            {
+                <div class="product-card--search-oos"><span>Hết hàng</span></div>
+            }
+        </div>
+        <div class="product-card--search-body">
+            <h3 class="product-card--search-title">
+                <span class="product-card--search-title-text">@Product.Name</span>
+            </h3>
+            <div class="product-card--search-price-row">
+                <span class="product-card--search-price">@FormatVnd(Product.Price)</span>
+            </div>
+            <div class="product-card--search-footer">
+                <span class="product-card--search-footer-rating">
+                    <span class="product-card--search-star" aria-hidden="true">★</span>
+                    @SearchRating
+                </span>
+                <span class="product-card--search-loc" title="@LocationText">@LocationText</span>
+            </div>
+        </div>
+    </article>
+}
+else if (Variant == "featured")
+{
+    <article class="product-card product-card--featured">
+        @if (Badge is not null)
+        {
+            <div class="product-badge product-badge--featured @Badge.Type">@Badge.Text</div>
+        }
+
+        <div class="product-card-media">
+            <img src="@ImageUrl" alt="@Product.Name" class="product-image product-image--featured" loading="lazy" />
+            <a href="@DetailPath" class="product-card-detail-link" aria-label="Xem @Product.Name"></a>
+
+            @if (Product.StockQuantity <= 0)
+            {
+                <div class="out-of-stock-overlay">
+                    <span>Hết hàng</span>
+                </div>
+            }
+
+            <div class="product-card-hover-layer" aria-hidden="@(Product.StockQuantity <= 0)">
+                @if (Product.StockQuantity > 0)
+                {
+                    <button type="button" class="product-add-cart-overlay" @onclick="AddToCartAsync" disabled="@isAdding">
+                        <i class="fas fa-shopping-bag" aria-hidden="true" style="margin-right: 6px;"></i>
+                        Thêm vào giỏ
+                    </button>
+                }
+            </div>
+        </div>
+
+        <a href="@DetailPath" class="product-card-body-link">
+            <div class="product-price-row-featured">
+                <span class="product-price-featured">@FormatVnd(Product.Price)</span>
+            </div>
+            <h3 class="product-name product-name--featured">@Product.Name</h3>
+            <div class="product-rating-row">
+                <span class="product-stars-featured" aria-hidden="true">@Stars</span>
+                <span class="product-review-count">@RatingText</span>
+            </div>
+        </a>
+    </article>
+}
+else
+{
+    <article class="product-card">
+        @if (Badge is not null)
+        {
+            <div class="product-badge @Badge.Type">@Badge.Text</div>
+        }
+
+        <div class="product-image-wrapper">
+            <img src="@ImageUrl" alt="@Product.Name" class="product-image" loading="lazy" />
+            @if (Product.StockQuantity <= 0)
+            {
+                <div class="out-of-stock-overlay"><span>Hết hàng</span></div>
+            }
+        </div>
+
+        <div class="product-info">
+            <h3 class="product-name"><a href="@DetailPath">@Product.Name</a></h3>
+            @if (!string.IsNullOrWhiteSpace(Product.Description))
+            {
+                <p class="product-description">@Product.Description</p>
+            }
+            <div class="product-price-wrapper">
+                <span class="product-price">@FormatVnd(Product.Price)</span>
+            </div>
+            <div class="product-stock">
+                @if (Product.StockQuantity > 0)
+                {
+                    <span class="in-stock">Còn @Product.StockQuantity sản phẩm</span>
+                }
+                else
+                {
+                    <span class="out-of-stock">Tạm hết hàng</span>
+                }
+            </div>
+            <div class="product-meta">
+                @if (!string.IsNullOrWhiteSpace(Product.CategoryName))
+                {
+                    <span class="product-category">@Product.CategoryName</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(Product.SupplierName))
+                {
+                    <span class="product-supplier">@Product.SupplierName</span>
+                }
+            </div>
+            <div class="product-rating-row">
+                <span class="product-stars-featured" aria-hidden="true">@Stars</span>
+                <span class="product-review-count">@RatingText</span>
+            </div>
+            @if (ShowActions)
+            {
+                <div class="product-actions">
+                    <button type="button" class="add-to-cart-btn" @onclick="AddToCartAsync" disabled="@(Product.StockQuantity <= 0 || isAdding)">
+                        <i class="fas fa-shopping-cart" style="font-size: 13px; margin-right: 6px;" aria-hidden="true"></i>
+                        Thêm vào giỏ
+                    </button>
+                    <button type="button" class="buy-now-btn" @onclick="BuyNowAsync" disabled="@(Product.StockQuantity <= 0)">
+                        <i class="fas fa-bolt" style="font-size: 13px; margin-right: 6px;" aria-hidden="true"></i>
+                        Mua ngay
+                    </button>
+                </div>
+            }
+        </div>
+    </article>
+}
+
+@code {
+    [Parameter, EditorRequired] public ProductDto_temp Product { get; set; } = default!;
+    [Parameter] public string Variant { get; set; } = "default";
+    [Parameter] public bool ShowActions { get; set; } = true;
+    [Parameter] public EventCallback<ProductDto_temp> OnAddToCart { get; set; }
+
+    private bool isAdding;
+
+    private string LocationText => Product.SupplierName ?? "TP. Hồ Chí Minh";
+
+    private int? DiscountPct => null;
+
+    private string SearchRating => Product.ReviewCount > 0
+        ? Product.AvgRating.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)
+        : (4 + (Product.ProductId % 11) / 10.0).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
+
+    private void GoToDetail() => Navigation.NavigateTo(DetailPath);
+
+    private void HandleSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or " ")
+        {
+            GoToDetail();
+        }
+    }
+
+    private string DetailPath => $"/products/{Product.ProductId}";
+
+    private string ImageUrl => string.IsNullOrWhiteSpace(Product.ImageUrl)
+        ? "https://images.unsplash.com/photo-1561948955-570b270e7c36?w=300"
+        : Product.ImageUrl!;
+
+    private string RatingText => Product.ReviewCount == 0
+        ? "Chưa có đánh giá"
+        : $"{Product.AvgRating:0.0} ({Product.ReviewCount} đánh giá)";
+
+    private string Stars
+    {
+        get
+        {
+            var rounded = Math.Clamp((int)Math.Round(Product.AvgRating), 0, 5);
+            return new string('★', rounded) + new string('☆', 5 - rounded);
+        }
+    }
+
+    private BadgeInfo? Badge => Product.StockQuantity <= 0
+        ? new BadgeInfo("Hết hàng", "out-of-stock")
+        : Product.StockQuantity < 10 ? new BadgeInfo("Sắp hết", "low-stock") : null;
+
+    private async Task AddToCartAsync()
+    {
+        if (!UserSession.IsAuthenticated)
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        isAdding = true;
+        try
+        {
+            await CartState.AddAsync(Product);
+            if (OnAddToCart.HasDelegate)
+            {
+                await OnAddToCart.InvokeAsync(Product);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Cart drawer might already be closed by the time we are done — surface
+            // the exception in the debug output so the issue is visible during dev.
+            System.Diagnostics.Debug.WriteLine($"[ProductCard.razor] AddAsync threw: {ex.GetType().Name} {ex.Message}");
+            throw;
+        }
+        finally
+        {
+            isAdding = false;
+        }
+    }
+
+    private async Task BuyNowAsync()
+    {
+        await AddToCartAsync();
+
+        // Persist the buy-now product to sessionStorage — Checkout.razor reads this key.
+        var addedItem = CartState.Items.FirstOrDefault(i => i.ProductId == Product.ProductId);
+        if (addedItem is not null)
+        {
+            var checkoutItems = new List<CheckoutStorageItem>
+            {
+                new(addedItem.ProductId, addedItem.Name, addedItem.Price, addedItem.ImageUrl, addedItem.Quantity)
+            };
+            await JS.InvokeVoidAsync("sessionStorage.setItem", "checkoutItems", System.Text.Json.JsonSerializer.Serialize(checkoutItems));
+        }
+
+        Navigation.NavigateTo("/cart/checkout");
+    }
+
+    private sealed record CheckoutStorageItem(int ProductId, string Name, decimal Price, string? ImageUrl, int Quantity);
+
+    private static string FormatVnd(decimal value) => string.Create(System.Globalization.CultureInfo.GetCultureInfo("vi-VN"), $"{value:C0}");
+
+    private sealed record BadgeInfo(string Text, string Type);
+}

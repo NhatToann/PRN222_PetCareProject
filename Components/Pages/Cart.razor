@@ -1,0 +1,235 @@
+@page "/cart"
+@inject PetShop.Services.CartStateService CartState
+@inject PetShop.Services.UserSessionService UserSession
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@implements IDisposable
+
+<PageTitle>Giỏ hàng</PageTitle>
+
+<div class="cart-page-wrapper">
+    <TopBar />
+    <PageContextBar Title="Giỏ hàng" />
+
+    <AuthGuard>
+    <div class="cart-page">
+        <div class="container">
+            @if (!_cartReady)
+            {
+                <div class="cart-empty">
+                    <p>Đang tải giỏ hàng…</p>
+                </div>
+            }
+            else if (CartState.Items.Count == 0)
+            {
+                <div class="cart-empty">
+                    <div class="cart-empty-icon">
+                        <i class="fas fa-shopping-cart" aria-hidden="true"></i>
+                    </div>
+                    <h2>Giỏ hàng trống</h2>
+                    <p>Hãy thêm sản phẩm vào giỏ hàng của bạn</p>
+                    <a href="/#featured-products" class="cart-empty-btn">Mua sắm ngay</a>
+                </div>
+            }
+            else
+            {
+                <div class="cart-items-section">
+                    <div class="cart-items-header">
+                        <div class="cart-header-left">
+                            <label class="cart-select-all">
+                                <input type="checkbox"
+                                       checked="@(SelectedItems.Count == CartState.Items.Count && CartState.Items.Count > 0)"
+                                       @onchange="HandleSelectAll" />
+                                <span> Chọn tất cả (@TotalItems sản phẩm)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="cart-items-list">
+                        @foreach (var item in CartState.Items)
+                        {
+                            <div class="cart-item @(SelectedItems.Contains(item.ProductId) ? "selected" : null)">
+                                <div class="cart-item-checkbox">
+                                    <input type="checkbox"
+                                           checked="@SelectedItems.Contains(item.ProductId)"
+                                           @onchange="() => ToggleItem(item.ProductId)" />
+                                </div>
+                                <div class="cart-item-image">
+                                    @if (!string.IsNullOrWhiteSpace(item.ImageUrl))
+                                    {
+                                        <img src="@item.ImageUrl" alt="@item.Name" />
+                                    }
+                                    else
+                                    {
+                                        <div class="cart-item-no-image"></div>
+                                    }
+                                </div>
+                                <div class="cart-item-info">
+                                    <div class="cart-item-name">@item.Name</div>
+                                    <div class="cart-item-price">@FormatPrice(item.Price)</div>
+                                </div>
+                                <div class="cart-item-actions">
+                                    <div class="quantity-control">
+                                        <button type="button" class="quantity-btn" @onclick="() => ChangeQuantityAsync(item.ProductId, item.Quantity - 1)" disabled="@(item.Quantity <= 1)" aria-label="Giảm số lượng">
+                                            <i class="fas fa-minus" aria-hidden="true"></i>
+                                        </button>
+                                        <span class="quantity-value">@item.Quantity</span>
+                                        <button type="button" class="quantity-btn" @onclick="() => ChangeQuantityAsync(item.ProductId, item.Quantity + 1)" disabled="@(item.Quantity >= item.StockQuantity)" aria-label="Tăng số lượng">
+                                            <i class="fas fa-plus" aria-hidden="true"></i>
+                                        </button>
+                                    </div>
+                                    <button type="button" class="cart-item-remove" @onclick="() => RemoveAsync(item.ProductId)">
+                                        <i class="fas fa-trash-alt" aria-hidden="true"></i> Xóa
+                                    </button>
+                                </div>
+                                <div class="cart-item-total">
+                                    <div class="cart-item-total-price">@FormatPrice(item.Price * item.Quantity)</div>
+                                    <div class="cart-item-total-note">/ sản phẩm</div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="cart-summary-inline">
+                        <div class="cart-summary-row">
+                            <span class="cart-summary-label">Tổng sản phẩm</span>
+                            <span class="cart-summary-value">@SelectedTotalItems / @TotalItems sản phẩm</span>
+                        </div>
+                        <div class="cart-summary-row">
+                            <span class="cart-summary-label">Tạm tính</span>
+                            <span class="cart-summary-value">@FormatPrice(SelectedTotalPrice)</span>
+                        </div>
+                        <div class="cart-summary-row">
+                            <span class="cart-summary-label">Phí vận chuyển</span>
+                            <span class="cart-summary-value">Miễn phí</span>
+                        </div>
+                        <div class="cart-summary-total">
+                            <span class="cart-summary-label">Tổng cộng</span>
+                            <span class="cart-summary-value">@FormatPrice(SelectedTotalPrice)</span>
+                        </div>
+                        <button type="button" class="cart-checkout-btn" @onclick="HandleCheckoutAsync">
+                            Thanh toán (@SelectedTotalItems sản phẩm)
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+    </AuthGuard>
+
+    <Footer />
+</div>
+
+@code {
+    private bool _cartReady;
+    private HashSet<int> SelectedItems { get; set; } = new();
+
+    private int TotalItems => CartState.Items.Sum(item => item.Quantity);
+
+    private int SelectedTotalItems => CartState.Items
+        .Where(item => SelectedItems.Contains(item.ProductId))
+        .Sum(item => item.Quantity);
+
+    private decimal SelectedTotalPrice => CartState.Items
+        .Where(item => SelectedItems.Contains(item.ProductId))
+        .Sum(item => item.Price * item.Quantity);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _cartReady = true;
+            try { await CartState.LoadAsync(); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Cart.razor] CartState.LoadAsync threw: {ex.GetType().Name}"); }
+            try { await UserSession.LoadAsync(); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Cart.razor] UserSession.LoadAsync threw: {ex.GetType().Name}"); }
+            SelectedItems = CartState.Items.Select(item => item.ProductId).ToHashSet();
+            StateHasChanged();
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        CartState.Changed += HandleCartChanged;
+        UserSession.Changed += HandleSessionChanged;
+    }
+
+    private async Task ChangeQuantityAsync(int productId, int quantity)
+    {
+        await CartState.UpdateQuantityAsync(productId, quantity);
+    }
+
+    private async Task RemoveAsync(int productId)
+    {
+        await CartState.RemoveAsync(productId);
+        SelectedItems.Remove(productId);
+    }
+
+    private void HandleSelectAll(ChangeEventArgs args)
+    {
+        var isChecked = args.Value is bool b && b;
+        if (isChecked)
+        {
+            SelectedItems = CartState.Items.Select(item => item.ProductId).ToHashSet();
+        }
+        else
+        {
+            SelectedItems.Clear();
+        }
+    }
+
+    private void ToggleItem(int productId)
+    {
+        if (SelectedItems.Contains(productId))
+        {
+            SelectedItems.Remove(productId);
+        }
+        else
+        {
+            SelectedItems.Add(productId);
+        }
+        StateHasChanged();
+    }
+
+    private async Task HandleCheckoutAsync()
+    {
+        if (!UserSession.IsAuthenticated)
+        {
+            await JS.InvokeVoidAsync("alert", "Bạn cần đăng nhập để thanh toán.");
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        if (SelectedItems.Count == 0)
+        {
+            await JS.InvokeVoidAsync("alert", "Vui lòng chọn ít nhất một sản phẩm.");
+            return;
+        }
+
+        // Persist only selected items as checkout items so the checkout page can use them.
+        var checkoutItems = CartState.Items
+            .Where(item => SelectedItems.Contains(item.ProductId))
+            .Select(item => new CheckoutStorageItem(
+                item.ProductId,
+                item.Name,
+                item.Price,
+                item.ImageUrl,
+                item.Quantity))
+            .ToList();
+        await JS.InvokeVoidAsync("sessionStorage.setItem", "checkoutItems", System.Text.Json.JsonSerializer.Serialize(checkoutItems));
+
+        Navigation.NavigateTo("/cart/checkout");
+    }
+
+    private void HandleCartChanged() => InvokeAsync(StateHasChanged);
+    private void HandleSessionChanged() => InvokeAsync(StateHasChanged);
+
+    private static string FormatPrice(decimal value) =>
+        string.Create(System.Globalization.CultureInfo.GetCultureInfo("vi-VN"), $"{value:C0}");
+
+    public void Dispose()
+    {
+        CartState.Changed -= HandleCartChanged;
+        UserSession.Changed -= HandleSessionChanged;
+    }
+
+    private sealed record CheckoutStorageItem(int ProductId, string Name, decimal Price, string? ImageUrl, int Quantity);
+}

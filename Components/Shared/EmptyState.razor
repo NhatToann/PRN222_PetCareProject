@@ -1,0 +1,9 @@
+<div class="state-box empty-state">
+    <strong>@Title</strong>
+    <span>@Message</span>
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = "No data";
+    [Parameter] public string Message { get; set; } = "Nothing matched your request.";
+}

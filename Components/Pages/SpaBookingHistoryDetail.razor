@@ -1,0 +1,379 @@
+@page "/spa-booking-history/{HistoryId:int}"
+@inject PetShop.Interfaces.ISpaBookingClient SpaClient
+@inject PetShop.Services.UserSessionService UserSession
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@implements IDisposable
+
+<PageTitle>Chi tiết đặt lịch spa - Pet Toy Shop</PageTitle>
+
+<div class="home-page">
+    <TopBar />
+    <PageContextBar Title="Chi tiết đặt lịch spa" />
+
+    <CustomerOnlyGuard>
+    <main class="spa-cart-page">
+        <div class="container">
+            @if (isLoading)
+            {
+                <LoadingIndicator Message="Đang tải chi tiết lịch đặt..." />
+            }
+            else if (!UserSession.IsAuthenticated)
+            {
+                <section class="spa-cart-page__empty">
+                    <p>Bạn cần đăng nhập để xem chi tiết lịch đặt.</p>
+                    <a class="spa-bh-btn spa-bh-btn--primary" href="/login" style="margin-top:12px">Đăng nhập</a>
+                </section>
+            }
+            else if (notFound)
+            {
+                <section class="spa-cart-page__empty">
+                    <p>Lịch đặt này không tồn tại hoặc không thuộc về bạn.</p>
+                    <a class="spa-bh-btn spa-bh-btn--primary" href="/spa-booking-history" style="margin-top:12px">Quay lại lịch sử đặt spa</a>
+                </section>
+            }
+            else if (!string.IsNullOrWhiteSpace(error))
+            {
+                <ErrorMessage Message="@error" />
+            }
+            else if (invoice is null)
+            {
+                <div class="spa-cart-page__empty">
+                    <p>Không có dữ liệu chi tiết.</p>
+                    <a class="spa-bh-btn spa-bh-btn--primary" href="/spa-booking-history" style="margin-top:12px">Quay lại lịch sử đặt spa</a>
+                </div>
+            }
+            else
+            {
+                var items = InvoiceItems;
+                var primary = items.FirstOrDefault();
+                var primaryName = string.IsNullOrWhiteSpace(primary?.ServiceName) ? "Dịch vụ spa" : primary!.ServiceName;
+                var totalDuration = items.Sum(i => Math.Max(1, i.Quantity) * Math.Max(0, i.DurationMin));
+
+                <div class="spa-history">
+                    <article class="spa-history-card spa-booking-detail-card">
+                        <section class="spa-history-card__media">
+                            <div class="spa-history-card__image" style="padding:0;overflow:hidden;background:#f1f5f9">
+                                <img src="@GetSpaServiceThumb(primaryName)" alt="@primaryName" />
+                            </div>
+
+                            <div class="spa-history-card__info">
+                                <h3>@primaryName</h3>
+                                <p><strong>Thú cưng:</strong> @(string.IsNullOrWhiteSpace(invoice.PetName) ? "—" : invoice.PetName)</p>
+                                <p><strong>Thời gian hẹn:</strong> @PetShop.Components.Shared.Format.DateTimeVi(invoice.AppointmentStart)</p>
+                                <p><strong>Mô tả dịch vụ:</strong> @GetServiceDescription(primaryName)</p>
+                                @if (items.Count > 1)
+                                {
+                                    <p class="order-detail-spa-card__more">+@(items.Count - 1) dịch vụ khác trong lịch đặt</p>
+                                }
+                            </div>
+                        </section>
+
+                        <section class="spa-history-card__invoice">
+                            <span class="spa-history-card__status @StatusLabelClass(invoice.Status)">
+                                @StatusLabel(invoice.Status)
+                            </span>
+
+                            <div class="spa-history-card__invoice-grid">
+                                <div>
+                                    <span>Tổng tiền</span>
+                                    <strong>@PetShop.Components.Shared.Format.Vnd(invoice.TotalPrice)</strong>
+                                </div>
+                                <div>
+                                    <span>Phương thức thanh toán</span>
+                                    <strong>@PaymentLabel(invoice.PaymentMethod)</strong>
+                                </div>
+                                <div>
+                                    <span>Mã booking</span>
+                                    <strong>#@invoice.BookingId</strong>
+                                </div>
+                                <div>
+                                    <span>Thời lượng</span>
+                                    <strong>@(totalDuration > 0 ? $"{totalDuration} phút" : "Liên hệ")</strong>
+                                </div>
+                                <div>
+                                    <span>Khách hàng</span>
+                                    <strong>@(string.IsNullOrWhiteSpace(invoice.CustomerName) ? "—" : invoice.CustomerName)</strong>
+                                </div>
+                                <div>
+                                    <span>Email</span>
+                                    <strong>@(string.IsNullOrWhiteSpace(invoice.CustomerEmail) ? "—" : invoice.CustomerEmail)</strong>
+                                </div>
+                            </div>
+
+                            @if (!string.IsNullOrWhiteSpace(paymentError))
+                            {
+                                <div class="spa-cart-page__error spa-booking-detail-error">@paymentError</div>
+                            }
+
+                            <div class="spa-history-card__actions">
+                                <a href="/spa-booking-history" class="spa-bh-btn spa-bh-btn--outline">Quay lại lịch sử</a>
+
+                                @if (CanCancel)
+                                {
+                                    <button type="button"
+                                            class="spa-bh-btn spa-bh-btn--danger-outline"
+                                            disabled="@isCancelling"
+                                            @onclick="CancelAsync">
+                                        @(isCancelling ? "Đang hủy..." : "Hủy lịch đặt")
+                                    </button>
+                                }
+
+                                @if (CanPayNow)
+                                {
+                                    <button type="button"
+                                            class="spa-bh-btn spa-bh-btn--primary"
+                                            disabled="@paymentLoading"
+                                            @onclick="PayNowAsync">
+                                        @(paymentLoading ? "Đang tạo thanh toán..." : "Thanh toán ngay")
+                                    </button>
+                                }
+
+                                <a class="spa-bh-btn spa-bh-btn--invoice" href="@($"/spa-invoice?bookingId={invoice.BookingId}")">Xem hóa đơn</a>
+                            </div>
+                        </section>
+
+                        <section class="spa-booking-detail-card__services">
+                            <h4 class="order-detail-lines__title">Dịch vụ đã đặt</h4>
+                            <div class="order-hist-items order-detail-lines">
+                                @foreach (var item in items)
+                                {
+                                    <div class="order-hist-line">
+                                        <div class="order-hist-line__main">
+                                            <div class="order-hist-line__thumb">
+                                                <img src="@GetSpaServiceThumb(item.ServiceName)" alt="@item.ServiceName" />
+                                            </div>
+                                            <div>
+                                                <div class="order-hist-line__title">@(string.IsNullOrWhiteSpace(item.ServiceName) ? "Dịch vụ spa" : item.ServiceName)</div>
+                                                <div class="order-hist-line__meta">Số lượng: x@(Math.Max(1, item.Quantity))</div>
+                                                <div class="order-hist-line__meta">Đơn giá: @PetShop.Components.Shared.Format.Vnd(item.UnitPrice)</div>
+                                                <div class="order-hist-line__meta">Thời lượng: @item.DurationMin phút</div>
+                                            </div>
+                                        </div>
+                                        <div class="order-hist-line__total">@PetShop.Components.Shared.Format.Vnd(item.UnitPrice * Math.Max(1, item.Quantity))</div>
+                                    </div>
+                                }
+                            </div>
+                        </section>
+                    </article>
+                </div>
+            }
+        </div>
+    </main>
+
+    <Footer />
+    </CustomerOnlyGuard>
+</div>
+
+@code {
+    [Parameter] public int HistoryId { get; set; }
+
+    private PetShop.Models.SpaBookingInvoiceDto? invoice;
+    private bool isLoading = true;
+    private bool notFound;
+    private bool isCancelling;
+    private bool paymentLoading;
+    private string? error;
+    private string? paymentError;
+
+    private int CurrentCustomerId => UserSession.CurrentUser?.UserId ?? 0;
+
+    private IReadOnlyList<PetShop.Models.SpaBookingItemDto> InvoiceItems =>
+        invoice?.Items ?? Array.Empty<PetShop.Models.SpaBookingItemDto>();
+
+    private bool CanCancel
+    {
+        get
+        {
+            var s = NormalizeStatus(invoice?.Status);
+            return s == NormalizeStatus(PetShop.Models.SpaBookingStatus.Pending)
+                || s == NormalizeStatus(PetShop.Models.SpaBookingStatus.AwaitingPayOS)
+                || s.Contains("chờ thanh toán");
+        }
+    }
+
+    private bool CanPayNow => invoice is not null && IsUnpaidStatus(invoice.Status) && !paymentLoading;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        isLoading = true;
+        notFound = false;
+        error = null;
+        paymentError = null;
+        paymentLoading = false;
+        invoice = null;
+
+        try { await UserSession.LoadAsync(); }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[SpaBookingHistoryDetail.razor] UserSession.LoadAsync threw: {ex.GetType().Name}"); }
+
+        if (HistoryId <= 0 || CurrentCustomerId <= 0)
+        {
+            notFound = true;
+            isLoading = false;
+            return;
+        }
+
+        var res = await SpaClient.GetInvoiceAsync(HistoryId, CurrentCustomerId);
+        if (res.StatusCode == 404 || (res.IsSuccess && res.Data is null))
+        {
+            notFound = true;
+        }
+        else if (!res.IsSuccess || res.Data is null)
+        {
+            error = res.Error ?? "Không tải được chi tiết lịch đặt.";
+        }
+        else
+        {
+            invoice = res.Data;
+        }
+
+        isLoading = false;
+    }
+
+    private async Task PayNowAsync()
+    {
+        if (invoice is null || paymentLoading) return;
+
+        paymentLoading = true;
+        paymentError = null;
+
+        var returnUrl = Navigation.ToAbsoluteUri($"/spa-invoice?payos=success&bookingId={invoice.BookingId}").ToString();
+        var cancelUrl = Navigation.ToAbsoluteUri($"/spa-invoice?payos=cancel&bookingId={invoice.BookingId}").ToString();
+        var res = await SpaClient.CreateSpaPayOSPaymentAsync(invoice.BookingId, new[] { invoice.BookingId }, returnUrl, cancelUrl);
+
+        paymentLoading = false;
+        if (res.IsSuccess && res.Data is not null && !string.IsNullOrWhiteSpace(res.Data.CheckoutUrl))
+        {
+            Navigation.NavigateTo(res.Data.CheckoutUrl, forceLoad: true);
+            return;
+        }
+
+        paymentError = res.Error ?? "Không thể tạo thanh toán PayOS.";
+        StateHasChanged();
+    }
+
+    private async Task CancelAsync()
+    {
+        if (isCancelling || invoice is null) return;
+
+        var confirm = await JS.InvokeAsync<bool>("confirm", $"Bạn có chắc muốn hủy lịch đặt #{invoice.BookingId}?");
+        if (!confirm) return;
+
+        isCancelling = true;
+        var res = await SpaClient.UpdateStatusAsync(invoice.BookingId, CurrentCustomerId, PetShop.Models.SpaBookingStatus.Cancelled);
+        isCancelling = false;
+
+        if (!res.IsSuccess)
+        {
+            error = res.Error ?? "Không thể hủy lịch đặt.";
+            return;
+        }
+
+        await ReloadAsync();
+    }
+
+    private static string StatusLabel(string? status) =>
+        PetShop.Models.SpaBookingStatus.Display.TryGetValue(status ?? "", out var label)
+            ? label
+            : (string.IsNullOrWhiteSpace(status) ? "Chưa thanh toán" : status);
+
+    private static string StatusLabelClass(string? status)
+    {
+        if (IsCancelledStatus(status)) return "is-cancel";
+        if (IsPaidOrDoneStatus(status)) return "is-paid";
+        return "";
+    }
+
+    private static string PaymentLabel(string? paymentMethod) =>
+        string.Equals(paymentMethod, "payos", StringComparison.OrdinalIgnoreCase) ? "PayOS" : "Tiền mặt";
+
+    private static bool IsCancelledStatus(string? status)
+    {
+        var s = NormalizeStatus(status);
+        return s.Contains("hủy") || s.Contains("cancel");
+    }
+
+    private static bool IsPaidOrDoneStatus(string? status)
+    {
+        var s = NormalizeStatus(status);
+        return s == NormalizeStatus(PetShop.Models.SpaBookingStatus.Paid)
+            || s == NormalizeStatus(PetShop.Models.SpaBookingStatus.Confirmed)
+            || s == NormalizeStatus(PetShop.Models.SpaBookingStatus.Completed)
+            || s == "paid"
+            || s == "completed"
+            || s.Contains("đã thanh toán")
+            || s.Contains("đã xác nhận")
+            || s.Contains("hoàn thành");
+    }
+
+    private static bool IsUnpaidStatus(string? status)
+    {
+        var s = NormalizeStatus(status);
+        if (s.Length == 0) return true;
+        if (IsCancelledStatus(status) || IsPaidOrDoneStatus(status)) return false;
+        return s == "pending"
+            || s.Contains("chưa thanh toán")
+            || s.Contains("chờ thanh toán")
+            || s.Contains("payos_pending");
+    }
+
+    private static string NormalizeStatus(string? status) =>
+        (status ?? string.Empty).Trim().ToLowerInvariant();
+
+    private static string GetServiceDescription(string? serviceName)
+    {
+        var n = (serviceName ?? string.Empty).Trim().ToLowerInvariant();
+        if (n.Contains("spa") || n.Contains("cao cấp") || n.Contains("khám") || n.Contains("chuyên sâu"))
+        {
+            return "Gói spa giúp thú cưng thư giãn, làm sạch toàn diện, chăm sóc da lông và tạo cảm giác dễ chịu sau liệu trình.";
+        }
+
+        if (n.Contains("tắm") || n.Contains("bath") || n.Contains("vệ sinh cơ bản"))
+        {
+            return "Dịch vụ tắm và vệ sinh cơ bản giúp làm sạch lông, khử mùi nhẹ nhàng, phù hợp chăm sóc định kỳ cho thú cưng.";
+        }
+
+        if (n.Contains("cắt") || n.Contains("tỉa"))
+        {
+            return "Dịch vụ cắt tỉa lông chuyên nghiệp giúp ngoại hình gọn gàng, mát mẻ và phù hợp giống loài của thú cưng.";
+        }
+
+        if (n.Contains("răng") || n.Contains("miệng"))
+        {
+            return "Dịch vụ vệ sinh răng miệng hỗ trợ làm sạch mảng bám, giảm mùi hôi và cải thiện sức khỏe răng miệng cho thú cưng.";
+        }
+
+        return "Dịch vụ chăm sóc spa dành cho thú cưng với quy trình an toàn, nhân viên giàu kinh nghiệm và không gian thân thiện.";
+    }
+
+    private static string GetSpaServiceThumb(string? serviceName)
+    {
+        var n = (serviceName ?? string.Empty).Trim().ToLowerInvariant();
+        if (n == "spa cao cấp") return "/images/spa-caocap1.jpg";
+        if (n == "tắm + vệ sinh cơ bản") return "/images/bath1.png";
+        if (n == "cắt tỉa lông chuyên nghiệp") return "/images/cut1.jpg";
+        if (n == "vệ sinh răng miệng") return "/images/teeth1.jpg";
+        if (n.Contains("tắm") || n.Contains("bath") || n.Contains("vệ sinh cơ bản")) return "/images/bath1.png";
+        if (n.Contains("cắt") || n.Contains("tỉa")) return "/images/cut1.jpg";
+        if (n.Contains("spa") || n.Contains("cao cấp") || n.Contains("khám") || n.Contains("chuyên sâu")) return "/images/spa-caocap1.jpg";
+        if (n.Contains("răng") || n.Contains("miệng")) return "/images/teeth1.jpg";
+        return "/images/placeholder.jpg";
+    }
+
+    protected override void OnInitialized()
+    {
+        UserSession.Changed += HandleSessionChanged;
+    }
+
+    private void HandleSessionChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        UserSession.Changed -= HandleSessionChanged;
+    }
+}

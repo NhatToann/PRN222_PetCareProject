@@ -1,0 +1,119 @@
+@* ServiceImageCarousel — React-parity carousel for Service Booking port.
+   Mirrors `ServiceImageCarousel` from React frontend/src/pages/ServicePage.jsx.
+   Auto-rotates every 3s when more than 1 image, pauses on hover, prev/next buttons, dots. *@
+
+@implements IDisposable
+
+<div class="service-carousel"
+     @onmouseenter="Pause" @onmouseleave="Resume">
+    <div class="service-carousel__track">
+        @for (var i = 0; i < Slides.Length; i++)
+        {
+            var idx = i;
+            <img src="@Slides[idx]"
+                 alt="@Alt"
+                 class="service-carousel__slide"
+                 style="opacity: @(idx == Current ? 1 : 0);"
+                 loading="lazy" />
+        }
+    </div>
+
+    @if (Slides.Length > 1)
+    {
+        <button type="button"
+                class="service-carousel__btn service-carousel__btn--prev"
+                aria-label="Ảnh trước"
+                @onclick="Prev"
+                @onclick:stopPropagation="true">
+            <i class="fas fa-chevron-left" aria-hidden="true"></i>
+        </button>
+        <button type="button"
+                class="service-carousel__btn service-carousel__btn--next"
+                aria-label="Ảnh tiếp"
+                @onclick="Next"
+                @onclick:stopPropagation="true">
+            <i class="fas fa-chevron-right" aria-hidden="true"></i>
+        </button>
+
+        <div class="service-carousel__dots">
+            @for (var i = 0; i < Slides.Length; i++)
+            {
+                var idx = i;
+                <button type="button"
+                        class="service-carousel__dot @(idx == Current ? "is-active" : null)"
+                        aria-label="@($"Chuyển đến ảnh {idx + 1}")"
+                        @onclick="() => GoTo(idx)"
+                        @onclick:stopPropagation="true"></button>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string[] Images { get; set; } = Array.Empty<string>();
+    [Parameter] public string Alt { get; set; } = string.Empty;
+
+    private System.Threading.Timer? _timer;
+    private int _current;
+    private bool _paused;
+    private bool _disposed;
+
+    private string[] Slides =>
+        Images is { Length: > 0 } ? Images : new[] { "/images/placeholder.jpg" };
+
+    private int Current => _current;
+
+    protected override void OnParametersSet()
+    {
+        _current = 0;
+        RestartTimer();
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender) RestartTimer();
+    }
+
+    private void RestartTimer()
+    {
+        _timer?.Dispose();
+        if (Slides.Length <= 1) return;
+        _timer = new System.Threading.Timer(_ => InvokeAsync(Advance), null, 3000, 3000);
+    }
+
+    private void Advance()
+    {
+        if (_disposed || _paused || Slides.Length <= 1) return;
+        _current = (_current + 1) % Slides.Length;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void Prev()
+    {
+        if (Slides.Length <= 1) return;
+        _current = (_current - 1 + Slides.Length) % Slides.Length;
+        StateHasChanged();
+    }
+
+    private void Next()
+    {
+        if (Slides.Length <= 1) return;
+        _current = (_current + 1) % Slides.Length;
+        StateHasChanged();
+    }
+
+    private void GoTo(int idx)
+    {
+        _current = idx;
+        StateHasChanged();
+    }
+
+    private void Pause() => _paused = true;
+    private void Resume() => _paused = false;
+
+    public void Dispose()
+    {
+        _disposed = true;
+        _timer?.Dispose();
+    }
+}

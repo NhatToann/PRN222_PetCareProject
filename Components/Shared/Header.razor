@@ -1,0 +1,184 @@
+@using Microsoft.JSInterop;
+@inject PetShop.Interfaces.IProductCatalogClient ProductCatalog
+@inject PetShop.Services.CartStateService CartState
+@inject PetShop.Services.UserSessionService UserSession
+@inject NavigationManager Navigation
+@implements IDisposable
+
+<header class="header">
+    <div class="container header-container">
+        <a href="@LogoTarget" class="brand-logo" aria-label="Pet Toy Shop">
+            <div class="brand-logo__img">
+                <img src="@BrandLogo" alt="" width="56" height="56" decoding="async" />
+            </div>
+            <span class="brand-logo__text">Pet Toy Shop</span>
+        </a>
+
+        <div class="search-wrapper">
+            <form class="search-form" @onsubmit="HandleSearchAsync" @onsubmit:preventDefault>
+                <input type="text"
+                       class="search-input"
+                       placeholder="Search products..."
+                       value="@searchTerm"
+                       @oninput="HandleSearchInput"
+                       @onfocus="() => showSuggestions = true"
+                       @onblur="HideSuggestionsLater" />
+                <button type="submit" class="search-button" aria-label="Search">
+                    <i class="fas fa-search" aria-hidden="true"></i>
+                </button>
+            </form>
+
+            @if (showSuggestions && !string.IsNullOrWhiteSpace(searchTerm))
+            {
+                <ul class="suggestions-list">
+                    @if (isLoadingSuggestions)
+                    {
+                        <li class="suggestion-item">Đang gợi ý...</li>
+                    }
+                    else if (Suggestions.Count == 0)
+                    {
+                        <li class="suggestion-item">Không có gợi ý phù hợp</li>
+                    }
+                    else
+                    {
+                        @foreach (var suggestion in Suggestions)
+                        {
+                            <li class="suggestion-item" @onclick="() => GoToSearch(suggestion)">
+                                <i class="fas fa-search" style="margin-right: 6px" aria-hidden="true"></i>
+                                @suggestion
+                            </li>
+                        }
+                    }
+                </ul>
+            }
+        </div>
+
+        <div class="header-contact">
+            <a href="/spa-cart" class="header-icon-link" title="Giỏ spa">
+                <span class="header-icon-wrap">
+                    <i class="fas fa-heart" aria-hidden="true"></i>
+                    <span class="header-icon-badge">0</span>
+                </span>
+            </a>
+            <button type="button"
+                    class="header-icon-link header-icon-link--cart header-icon-link--cart-btn"
+                    title="Giỏ hàng"
+                    @onclick="OpenCart">
+                <span class="header-icon-wrap">
+                    <i class="fas fa-shopping-cart" aria-hidden="true"></i>
+                    <span class="header-icon-badge">@CartBadge</span>
+                </span>
+                    <span class="header-cart-sum">@FormatVnd(CartTotal)</span>
+            </button>
+        </div>
+    </div>
+</header>
+
+@code {
+    private const string BrandLogo = "https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?w=160&q=80";
+
+    [Parameter] public EventCallback OnOpenCart { get; set; }
+
+    private string searchTerm = string.Empty;
+    private bool showSuggestions;
+    private bool isLoadingSuggestions = true;
+    private IReadOnlyList<string> allProductNames = Array.Empty<string>();
+
+    private string LogoTarget => (UserSession.CurrentUser?.Role ?? string.Empty).Equals("staff", StringComparison.OrdinalIgnoreCase) ? "/system" : "/";
+
+    private string CartBadge => !_cartReady || CartState.Count > 99
+        ? (!_cartReady ? "0" : "99+")
+        : CartState.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    private decimal CartTotal => _cartReady ? CartState.Total : 0;
+
+    private IReadOnlyList<string> Suggestions
+    {
+        get
+        {
+            var keyword = NormalizeText(searchTerm);
+            if (string.IsNullOrWhiteSpace(keyword))
+            {
+                return Array.Empty<string>();
+            }
+
+            var startsWith = allProductNames.Where(name => NormalizeText(name).StartsWith(keyword, StringComparison.OrdinalIgnoreCase));
+            var includes = allProductNames.Where(name => !NormalizeText(name).StartsWith(keyword, StringComparison.OrdinalIgnoreCase) && NormalizeText(name).Contains(keyword, StringComparison.OrdinalIgnoreCase));
+            return startsWith.Concat(includes).Take(8).ToArray();
+        }
+    }
+
+    private bool _cartReady;
+
+    protected override void OnInitialized()
+    {
+        CartState.Changed += HandleCartChanged;
+        UserSession.Changed += HandleSessionChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        try { await CartState.LoadAsync(); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Header.razor] CartState.LoadAsync threw: {ex.GetType().Name}"); }
+        _cartReady = true;
+        try { await UserSession.LoadAsync(); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Header.razor] UserSession.LoadAsync threw: {ex.GetType().Name}"); }
+        var products = await ProductCatalog.GetProductsAsync();
+        allProductNames = products.Data?.Select(product => product.Name).Where(name => !string.IsNullOrWhiteSpace(name)).Distinct().ToArray() ?? Array.Empty<string>();
+        isLoadingSuggestions = false;
+        StateHasChanged();
+    }
+
+    private void HandleSearchInput(ChangeEventArgs args)
+    {
+        searchTerm = args.Value?.ToString() ?? string.Empty;
+        showSuggestions = true;
+    }
+
+    private Task HandleSearchAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            GoToSearch(searchTerm);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task HideSuggestionsLater()
+    {
+        await Task.Delay(200);
+        showSuggestions = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void GoToSearch(string term)
+    {
+        searchTerm = term;
+        showSuggestions = false;
+        Navigation.NavigateTo($"/search?q={Uri.EscapeDataString(term)}");
+    }
+
+    private Task OpenCart() => OnOpenCart.InvokeAsync();
+
+    private static string NormalizeText(string value)
+    {
+        var normalized = value.ToLowerInvariant().Normalize(System.Text.NormalizationForm.FormD);
+        return new string(normalized.Where(c => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark).ToArray()).Trim();
+    }
+
+    private static string FormatVnd(decimal value) => string.Create(System.Globalization.CultureInfo.GetCultureInfo("vi-VN"), $"{value:N0}₫");
+
+    private void HandleCartChanged() { try { InvokeAsync(StateHasChanged); } catch (JSDisconnectedException) { } }
+
+    private void HandleSessionChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        CartState.Changed -= HandleCartChanged;
+        UserSession.Changed -= HandleSessionChanged;
+    }
+}

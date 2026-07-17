@@ -1,0 +1,331 @@
+@page "/spa-invoice"
+@inject ISpaBookingClient SpaClient
+@inject UserSessionService UserSession
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@implements IDisposable
+
+<PageTitle>Hóa đơn spa – Pet Toy Shop</PageTitle>
+
+<div class="home-page spa-invoice-page">
+    <TopBar />
+    <PageContextBar Title="Hóa đơn" />
+
+    <CustomerOnlyGuard>
+    <main class="spa-invoice-page__main">
+
+        @* ===== LOADING ===== *@
+        @if (isLoading)
+        {
+            <div class="spa-invoice__loading">
+                <div class="spa-invoice__spinner"></div>
+                <p>Đang tải hóa đơn...</p>
+            </div>
+        }
+
+        @* ===== ERROR ===== *@
+        else if (!string.IsNullOrWhiteSpace(error))
+        {
+            <div class="spa-invoice__error-state">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="1.5">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <p>@error</p>
+                <a class="spa-invoice-btn spa-invoice-btn--outline" href="/spa-booking-history">
+                    Quay lại lịch sử
+                </a>
+            </div>
+        }
+
+        @* ===== MISSING bookingId ===== *@
+        else if (BookingId is null || BookingId <= 0)
+        {
+            <div class="spa-invoice__error-state">
+                <p>Thiếu mã booking.</p>
+                <a class="spa-invoice-btn spa-invoice-btn--outline" href="/spa-booking-history">
+                    Quay lại lịch sử
+                </a>
+            </div>
+        }
+
+        @* ===== INVOICE CARD ===== *@
+        else if (invoice is not null)
+        {
+            var payosSuccess = string.Equals(Payos, "success", StringComparison.OrdinalIgnoreCase);
+            var payosCancel  = string.Equals(Payos, "cancel",  StringComparison.OrdinalIgnoreCase);
+            var statusLabel  = GetStatusLabel(invoice.Status ?? "", payosSuccess, payosCancel);
+            var statusClass  = GetStatusClass(payosSuccess, payosCancel);
+            var createdDate   = invoice.CreatedAt.HasValue ? invoice.CreatedAt.Value.ToString("dd/MM/yyyy") : "-";
+            var apptDate     = invoice.AppointmentStart.ToString("dd/MM/yyyy");
+            var apptTime     = invoice.AppointmentStart.ToString("HH:mm");
+            var subtotal     = invoice.Items.Sum(i => i.UnitPrice * i.Quantity);
+            var displayTotal = invoice.TotalPrice > 0 ? invoice.TotalPrice : subtotal;
+            var vat          = (long)Math.Round(displayTotal * 0.1m);
+            var grandTotal   = displayTotal + vat;
+
+            <article class="spa-invoice-card @(payosCancel ? "spa-invoice-card--cancel" : "")">
+
+                @* ---- Header: brand + meta + status badge ---- *@
+                <div class="spa-invoice-card__header">
+                    <div class="spa-invoice-card__header-left">
+
+                        @* Brand *@
+                        <div class="spa-invoice-card__brand">
+                            <div class="spa-invoice-card__brand-icon">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M12 2a5 5 0 0 1 5 5c0 2.76-2.24 5-5 5s-5-2.24-5-5a5 5 0 0 1 5-5z"/>
+                                    <path d="M12 22v-7"/>
+                                    <path d="M8 17l4-5 4 5"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <span class="spa-invoice-card__brand-name">Pet Toy Shop</span>
+                                <span class="spa-invoice-card__brand-sub">Pet Spa Service</span>
+                            </div>
+                        </div>
+
+                        @* Meta *@
+                        <div class="spa-invoice-card__meta">
+                            <div class="spa-invoice-card__meta-item">
+                                <span class="spa-invoice-card__meta-label">Ngày đặt</span>
+                                <span class="spa-invoice-card__meta-value">@createdDate</span>
+                            </div>
+                            <div class="spa-invoice-card__meta-item">
+                                <span class="spa-invoice-card__meta-label">Mã booking</span>
+                                <span class="spa-invoice-card__booking-id">#@invoice.BookingId</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    @* Status badge *@
+                    <div class="spa-invoice-card__status-badge @statusClass">
+                        <span class="spa-invoice-card__status-dot"></span>
+                        <span>@statusLabel</span>
+                    </div>
+                </div>
+
+                @* ---- Cancel alert ---- *@
+                @if (payosCancel)
+                {
+                    <div class="spa-invoice-card__alert">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="15" y1="9" x2="9" y2="15"/>
+                            <line x1="9" y1="9" x2="15" y2="15"/>
+                        </svg>
+                        Đơn thanh toán đã bị hủy. Bạn có thể đặt lịch lại bất kỳ lúc nào.
+                    </div>
+                }
+
+                @* ---- Info grid: 2 columns ---- *@
+                <div class="spa-invoice-card__info-grid">
+
+                    @* Left: Customer info *@
+                    <div class="spa-invoice-card__info-section">
+                        <h3 class="spa-invoice-card__section-title">Thông tin khách hàng</h3>
+                        <div class="spa-invoice-card__info-table">
+                            <div class="spa-invoice-card__info-row">
+                                <span>Khách hàng</span>
+                                <strong>@(invoice.CustomerName ?? "-")</strong>
+                            </div>
+                            <div class="spa-invoice-card__info-row">
+                                <span>Email</span>
+                                <strong>@(invoice.CustomerEmail ?? "-")</strong>
+                            </div>
+                            <div class="spa-invoice-card__info-row">
+                                <span>Thú cưng</span>
+                                <strong>@(invoice.PetName ?? "-")</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    @* Right: Appointment info *@
+                    <div class="spa-invoice-card__info-section">
+                        <h3 class="spa-invoice-card__section-title">Thông tin đặt lịch</h3>
+                        <div class="spa-invoice-card__info-table">
+                            <div class="spa-invoice-card__info-row">
+                                <span>Ngày hẹn</span>
+                                <strong>@apptDate</strong>
+                            </div>
+                            <div class="spa-invoice-card__info-row">
+                                <span>Giờ bắt đầu</span>
+                                <strong>@apptTime</strong>
+                            </div>
+                            <div class="spa-invoice-card__info-row">
+                                <span>Trạng thái</span>
+                                <strong>@statusLabel</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @* ---- Service table ---- *@
+                <div class="spa-invoice-card__services">
+                    <h3 class="spa-invoice-card__section-title">Chi tiết dịch vụ</h3>
+                    <div class="spa-invoice-card__table">
+                        <div class="spa-invoice-card__table-head">
+                            <span>STT</span>
+                            <span>Tên dịch vụ</span>
+                            <span>Đơn giá</span>
+                            <span>Thành tiền</span>
+                        </div>
+                        @for (int i = 0; i < invoice.Items.Count; i++)
+                        {
+                            var item = invoice.Items[i];
+                            var lineTotal = item.UnitPrice * item.Quantity;
+                            <div class="spa-invoice-card__table-row">
+                                <span>@(i + 1)</span>
+                                <span class="spa-invoice-card__service-name">@item.ServiceName</span>
+                                <span>@PetShop.Components.Shared.Format.Vnd(item.UnitPrice)</span>
+                                <strong>@PetShop.Components.Shared.Format.Vnd(lineTotal)</strong>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                @* ---- Totals ---- *@
+                <div class="spa-invoice-card__totals">
+                    <div class="spa-invoice-card__total-row spa-invoice-card__total-row--muted">
+                        <span>Tạm tính</span>
+                        <span>@PetShop.Components.Shared.Format.Vnd(displayTotal)</span>
+                    </div>
+                    <div class="spa-invoice-card__total-row spa-invoice-card__total-row--muted">
+                        <span>VAT (10%)</span>
+                        <span>@PetShop.Components.Shared.Format.Vnd(vat)</span>
+                    </div>
+                    <div class="spa-invoice-card__grand-total">
+                        <span>Tổng cộng</span>
+                        <strong>@PetShop.Components.Shared.Format.Vnd(grandTotal)</strong>
+                    </div>
+                </div>
+
+                @* ---- Footer: thanks + action buttons ---- *@
+                <div class="spa-invoice-card__footer">
+                    @if (!payosCancel)
+                    {
+                        <p class="spa-invoice-card__thanks">
+                            Cảm ơn quý khách đã sử dụng dịch vụ của Pet Toy Shop!
+                        </p>
+                    }
+                    <div class="spa-invoice-card__actions">
+                        @if (payosCancel)
+                        {
+                            <a class="spa-invoice-btn spa-invoice-btn--outline" href="/spa-cart">
+                                Quay lại giỏ spa
+                            </a>
+                        }
+                        else
+                        {
+                            <a class="spa-invoice-btn spa-invoice-btn--outline" href="/spa-booking-history">
+                                Xem lịch sử booking
+                            </a>
+                        }
+                        <button type="button" class="spa-invoice-btn spa-invoice-btn--primary" @onclick="PrintInvoice">
+                            In hóa đơn
+                        </button>
+                    </div>
+                </div>
+            </article>
+        }
+
+    </main>
+
+    <Footer />
+    </CustomerOnlyGuard>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "bookingId")] private int? BookingId { get; set; }
+    [SupplyParameterFromQuery(Name = "payos")]  private string? Payos { get; set; }
+    [SupplyParameterFromQuery(Name = "orderCode")] private int? OrderCode { get; set; }
+
+    private SpaBookingInvoiceDto? invoice;
+    private bool isLoading = true;
+    private string? error;
+    private bool _statusSynced;
+
+    private string GetStatusLabel(string dbStatus, bool payosSuccess, bool payosCancel)
+    {
+        if (payosSuccess) return SpaBookingStatus.Paid;
+        if (payosCancel)  return SpaBookingStatus.Cancelled;
+        return dbStatus ?? "Chưa thanh toán";
+    }
+
+    private string GetStatusClass(bool payosSuccess, bool payosCancel)
+    {
+        if (payosSuccess) return "is-paid";
+        if (payosCancel)  return "is-cancel";
+        return "";
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try { await UserSession.LoadAsync(); }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[SpaInvoice] UserSession.LoadAsync: {ex.Message}");
+        }
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        isLoading = true;
+        error = null;
+        StateHasChanged();
+
+        if (BookingId is null || BookingId <= 0 || CurrentCustomerId <= 0)
+        {
+            error = "Thiếu mã booking.";
+            isLoading = false;
+            StateHasChanged();
+            return;
+        }
+
+        // Sync booking status from PayOS return (mirrors React's updateBookingStatusFromPayOS)
+        if (!_statusSynced && !string.IsNullOrWhiteSpace(Payos))
+        {
+            _statusSynced = true;
+            var nextStatus = string.Equals(Payos, "success", StringComparison.OrdinalIgnoreCase)
+                ? SpaBookingStatus.Paid
+                : SpaBookingStatus.Cancelled;
+
+            await SpaClient.UpdateStatusAsync(BookingId.Value, CurrentCustomerId, nextStatus);
+        }
+
+        // Fetch invoice
+        var res = await SpaClient.GetInvoiceAsync(BookingId.Value, CurrentCustomerId);
+        if (!res.IsSuccess || res.Data is null)
+        {
+            error = res.StatusCode == 404
+                ? "Không tìm thấy hóa đơn."
+                : (res.Error ?? "Không tải được hóa đơn.");
+        }
+        else
+        {
+            invoice = res.Data;
+        }
+
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    protected override void OnInitialized()
+    {
+        UserSession.Changed += HandleSessionChanged;
+    }
+
+    private void HandleSessionChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        UserSession.Changed -= HandleSessionChanged;
+    }
+
+    private int CurrentCustomerId => UserSession.CurrentUser?.UserId ?? 0;
+
+    private async Task PrintInvoice() => await JS.InvokeVoidAsync("window.print");
+}

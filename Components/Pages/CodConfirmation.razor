@@ -1,0 +1,232 @@
+@page "/checkout/cod-success"
+@inject PetShop.Services.UserSessionService UserSession
+@inject PetShop.Interfaces.IProductCatalogClient ProductCatalog
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@implements IDisposable
+
+<PageTitle>Xác nhận đơn hàng – Pet Toy Shop</PageTitle>
+
+<div class="cod-confirmation-page">
+    <TopBar />
+    <PageContextBar Title="Xác nhận đơn hàng" />
+
+    <div class="cod-confirmation-content">
+        <div class="success-banner">
+            <div class="success-icon">
+                <i class="fas fa-check" aria-hidden="true"></i>
+            </div>
+            <h1 class="success-title">Đặt hàng thành công!</h1>
+            <p class="success-subtitle">
+                Cảm ơn bạn đã đặt hàng. Đơn hàng của bạn đang được xử lý.
+            </p>
+        </div>
+
+        @if (orderInfo != null)
+        {
+            <div class="order-info-card">
+                <h2 class="order-info-title">Thông tin đơn hàng</h2>
+                <div class="order-info-grid">
+                    <div class="order-info-item">
+                        <span class="order-info-label">Mã đơn hàng</span>
+                        <span class="order-info-value">@orderInfo.OrderCode</span>
+                    </div>
+                    <div class="order-info-item">
+                        <span class="order-info-label">Người nhận</span>
+                        <span class="order-info-value">@orderInfo.FullName</span>
+                    </div>
+                    <div class="order-info-item">
+                        <span class="order-info-label">Số điện thoại</span>
+                        <span class="order-info-value">@orderInfo.Phone</span>
+                    </div>
+                    <div class="order-info-item">
+                        <span class="order-info-label">Địa chỉ giao hàng</span>
+                        <span class="order-info-value">@orderInfo.Address</span>
+                    </div>
+                    <div class="order-info-item">
+                        <span class="order-info-label">Tổng tiền</span>
+                        <span class="order-info-value order-total">@FormatPrice(orderInfo.TotalAmount)</span>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="success-actions">
+            <a class="btn-primary" href="/">
+                <i class="fas fa-home" aria-hidden="true"></i>
+                Về trang chủ
+            </a>
+            <a class="btn-secondary" href="/cart">
+                <i class="fas fa-shopping-cart" aria-hidden="true"></i>
+                Xem giỏ hàng
+            </a>
+        </div>
+
+        <div class="suggested-products">
+            <h2 class="suggested-title">Có thể bạn sẽ thích</h2>
+            @if (loadingProducts)
+            {
+                <div class="loading">Đang tải sản phẩm...</div>
+            }
+            else if (suggestedProducts.Count > 0)
+            {
+                <div class="suggested-grid">
+                    @foreach (var product in suggestedProducts)
+                    {
+                        <div class="suggested-product-card">
+                            <a href="/products/@product.ProductId" class="suggested-product-image">
+                                @if (!string.IsNullOrWhiteSpace(product.ImageUrl))
+                                {
+                                    <img src="@product.ImageUrl" alt="@product.Name" />
+                                }
+                                else
+                                {
+                                    <img src="https://images.unsplash.com/photo-1561948955-570b270e7c36?w=300" alt="@product.Name" />
+                                }
+                            </a>
+                            <div class="suggested-product-info">
+                                <a href="/products/@product.ProductId" class="product-name">@product.Name</a>
+                                <div class="product-price-row">
+                                    <span class="product-price">@FormatPrice(product.Price)</span>
+                                    <button type="button" class="cod-add-to-cart-btn" title="Thêm vào giỏ"
+                                            @onclick="@(() => HandleAddToCart(product))">
+                                        <i class="fas fa-cart-plus" aria-hidden="true"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <p class="no-products">Không có sản phẩm nào</p>
+            }
+        </div>
+    </div>
+
+    <Footer />
+</div>
+
+@code {
+    private sealed record LastCodOrderInfo(int OrderId, int OrderCode, string FullName, string Phone, string Address, decimal TotalAmount);
+
+    private LastCodOrderInfo? orderInfo;
+    private List<ProductDto_temp> suggestedProducts = new();
+    private bool loadingProducts = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await UserSession.LoadAsync();
+            await LoadOrderInfoAsync();
+            await LoadSuggestedProductsAsync();
+        }
+    }
+
+    private async Task LoadOrderInfoAsync()
+    {
+        try
+        {
+            var json = await JS.InvokeAsync<string?>("localStorage.getItem", "lastCodOrder");
+            if (!string.IsNullOrWhiteSpace(json))
+            {
+                orderInfo = System.Text.Json.JsonSerializer.Deserialize<LastCodOrderInfo>(json);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[CodConfirmation] localStorage read error: {ex.Message}");
+        }
+        StateHasChanged();
+    }
+
+    private async Task LoadSuggestedProductsAsync()
+    {
+        loadingProducts = true;
+        StateHasChanged();
+
+        try
+        {
+            var result = await ProductCatalog.GetProductsAsync();
+            if (result.IsSuccess && result.Data != null)
+            {
+                suggestedProducts = result.Data.Take(10).ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[CodConfirmation] Product load error: {ex.Message}");
+        }
+        finally
+        {
+            loadingProducts = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleAddToCart(ProductDto_temp product)
+    {
+        if (!UserSession.IsAuthenticated)
+        {
+            Navigation.NavigateTo("/login", forceLoad: true);
+            return;
+        }
+
+        try
+        {
+            var rawCart = await JS.InvokeAsync<string?>("localStorage.getItem", "cart");
+            var cartItems = new List<LocalCartItem>();
+
+            if (!string.IsNullOrWhiteSpace(rawCart))
+            {
+                try
+                {
+                    cartItems = System.Text.Json.JsonSerializer.Deserialize<List<LocalCartItem>>(rawCart) ?? new();
+                }
+                catch { cartItems = new(); }
+            }
+
+            var existing = cartItems.FindIndex(x => x.Id == product.ProductId);
+            if (existing >= 0)
+            {
+                cartItems[existing] = cartItems[existing] with { Quantity = cartItems[existing].Quantity + 1 };
+            }
+            else
+            {
+                cartItems.Add(new LocalCartItem(
+                    product.ProductId,
+                    product.Name ?? string.Empty,
+                    product.Price,
+                    product.ImageUrl ?? string.Empty,
+                    1));
+            }
+
+            await JS.InvokeVoidAsync("localStorage.setItem", "cart",
+                System.Text.Json.JsonSerializer.Serialize(cartItems));
+            await JS.InvokeVoidAsync("alert", "Đã thêm vào giỏ hàng!");
+        }
+        catch
+        {
+            await JS.InvokeVoidAsync("alert", "Đã thêm vào giỏ hàng!");
+        }
+    }
+
+    private static string FormatPrice(decimal value) =>
+        string.Create(System.Globalization.CultureInfo.GetCultureInfo("vi-VN"), $"{value:C0}");
+
+    private sealed record LocalCartItem(int Id, string Name, decimal Price, string Image, int Quantity);
+
+    public void Dispose()
+    {
+        UserSession.Changed -= HandleChanged;
+    }
+
+    private void HandleChanged() => InvokeAsync(StateHasChanged);
+
+    protected override void OnInitialized()
+    {
+        UserSession.Changed += HandleChanged;
+    }
+}

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <link rel="stylesheet" href="app.css" />
+    <link rel="stylesheet" href="css/template/index.css" />
+    <link rel="stylesheet" href="css/template/App.css" />
+    <link rel="stylesheet" href="css/template/home.css" />
+    <link rel="stylesheet" href="css/template/cartDrawer.css" />
+    <link rel="stylesheet" href="css/template/pageContextBar.css" />
+    <link rel="stylesheet" href="css/template/auth.css" />
+    <link rel="stylesheet" href="css/template/profile.css?v=20260716-account" />
+    <link rel="stylesheet" href="css/template/searchProducts.css" />
+    <link rel="stylesheet" href="css/template/cart.css" />
+    <link rel="stylesheet" href="css/template/productDetails.css" />
+    <link rel="stylesheet" href="css/template/checkout.css" />
+    <link rel="stylesheet" href="css/template/checkoutResult.css" />
+    <link rel="stylesheet" href="css/template/codConfirmation.css" />
+    <link rel="stylesheet" href="css/template/spa.css?v=20260716-services" />
+    <link rel="stylesheet" href="css/spa/service-react.css?v=20260716-services" />
+    <link rel="stylesheet" href="css/template/invoice.css?v=20260716-invoice" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    <style>
+        .toast-notification {
+            position: fixed;
+            right: 24px;
+            bottom: 24px;
+            z-index: 11000;
+            padding: 14px 18px;
+            border-radius: 18px;
+            background: linear-gradient(135deg, var(--ziggy-purple, #4a2477), var(--ziggy-orange, #ff8c42));
+            color: #fff;
+            font-weight: 700;
+            box-shadow: 0 18px 40px rgba(74, 36, 119, 0.25);
+        }
+        .auth-error {
+            color: #c0392b;
+            background: #fdf0ef;
+            border: 1px solid #f5c6c2;
+            border-radius: 6px;
+            padding: 10px 14px;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        .auth-success {
+            color: #1a7a4a;
+            background: #eafaf1;
+            border: 1px solid #a9dfbf;
+            border-radius: 6px;
+            padding: 10px 14px;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+    </style>
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <HeadOutlet @rendermode="InteractiveServer" />
+</head>
+
+<body>
+    <Routes @rendermode="InteractiveServer" />
+    <script src="_framework/blazor.web.js"></script>
+    <script src="js/blazorAuth.js"></script>
+    <script src="js/spaCart.js"></script>
+    <script src="js/cartStorage.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,125 @@
+@inject PetShop.Services.UserSessionService UserSession
+@inject PetShop.Services.CartStateService CartState
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@implements IDisposable
+
+<div class="top-bar">
+    <div class="container top-bar-container">
+        <div class="top-bar-left">
+            <span class="contact-item">
+                <i class="fas fa-phone-alt icon" aria-hidden="true"></i>
+                <span>0123 456 789</span>
+            </span>
+            <span class="contact-item">
+                <i class="fas fa-envelope icon" aria-hidden="true"></i>
+                <span>hello@petstore.com</span>
+            </span>
+        </div>
+
+        <div class="top-bar-center" aria-hidden="true">
+            <span class="top-bar-promo-badge">Giảm giá 15%</span>
+            <span class="top-bar-promo-text">cho đơn hàng từ 1.000.000đ.</span>
+        </div>
+
+        <div class="top-bar-right">
+            @if (UserSession.CurrentUser is not null)
+            {
+                <div class="top-bar-dropdown">
+                    <button type="button" class="top-bar-link system-greeting-btn" @onclick="ToggleMenu">
+                        <i class="fas fa-user icon" aria-hidden="true"></i>
+                        @Greeting
+                    </button>
+                    
+                    @if (openMenu)
+                    {
+                        <div class="top-bar-menu">
+                            @if (Role == "admin")
+                            {
+                                <a href="/account" class="top-bar-menu-item" @onclick="CloseMenu">Quản lý tài khoản</a>
+                                <a href="/system" class="top-bar-menu-item" @onclick="CloseMenu">Quản lý hệ thống</a>
+                            }
+                            else if (Role == "user")
+                            {
+                                <a href="/account" class="top-bar-menu-item" @onclick="CloseMenu">Quản lý tài khoản</a>
+                                <a href="/account/orders" class="top-bar-menu-item" @onclick="CloseMenu">Lịch sử đơn hàng</a>
+                                <a href="/spa-booking-history" class="top-bar-menu-item" @onclick="CloseMenu">Lịch sử đặt spa</a>
+                            }
+                            else if (Role == "staff")
+                            {
+                                <a href="/system" class="top-bar-menu-item" @onclick="CloseMenu">Quản lý hệ thống</a>
+                            }
+
+                            <button type="button" class="top-bar-menu-item" @onclick="LogoutAsync">Đăng xuất</button>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <a href="/login" class="top-bar-link">
+                    <i class="fas fa-user icon" aria-hidden="true"></i>
+                    Đăng nhập
+                </a>
+                <a href="/register" class="top-bar-link">Đăng ký</a>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool openMenu;
+
+    private string Role => (UserSession.CurrentUser?.Role ?? string.Empty).ToLowerInvariant();
+
+    private string Greeting
+    {
+        get
+        {
+            var label = Role switch
+            {
+                "admin" => "quản trị viên",
+                "staff" => "nhân viên",
+                "doctor" => "bác sĩ",
+                "user" => "khách hàng",
+                _ => "người dùng"
+            };
+
+            return $"Chào {label} {UserSession.CurrentUser?.Name}".Trim();
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        UserSession.Changed += HandleSessionChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try { await UserSession.LoadAsync(); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[TopBar] OnAfterRenderAsync LoadAsync threw: {ex.GetType().Name}"); }
+            StateHasChanged();
+        }
+    }
+
+    private void ToggleMenu() => openMenu = !openMenu;
+
+    private void CloseMenu() => openMenu = false;
+
+    private async Task LogoutAsync()
+    {
+        await UserSession.SignOutAsync();
+        await JS.InvokeVoidAsync("spaCart.clear");
+        try { await CartState.ClearAsync(); } catch { /* localStorage write may fail in disconnected state */ }
+        openMenu = false;
+        Navigation.NavigateTo("/login");
+    }
+
+    private void HandleSessionChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        UserSession.Changed -= HandleSessionChanged;
+    }
+}

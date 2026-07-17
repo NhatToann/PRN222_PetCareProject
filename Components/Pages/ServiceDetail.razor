@@ -1,0 +1,536 @@
+@page "/services/{Id:int}"
+@inject PetShop.Interfaces.IPetServiceClient PetServiceClient
+@inject PetShop.Interfaces.ISpaBookingClient SpaClient
+@inject PetShop.Services.UserSessionService UserSession
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@using System.Globalization
+
+<PageTitle>@(detail?.Service?.Name ?? "Chi tiết dịch vụ")</PageTitle>
+
+<div class="home-page pd-page">
+    <TopBar />
+    <Header />
+    <Navigation />
+
+    <main>
+        <div class="pd-wrap">
+            @if (isLoading)
+            {
+                <div class="pd-state">Đang tải chi tiết dịch vụ...</div>
+            }
+            else if (notFound)
+            {
+                <div class="pd-state">
+                    Không tìm thấy dịch vụ.
+                    <a href="/services" style="margin-left:8px">Quay lại danh sách</a>
+                </div>
+            }
+            else if (!string.IsNullOrWhiteSpace(error) || detail?.Service is null)
+            {
+                <div class="pd-state">@(error ?? "Không có dữ liệu dịch vụ.")</div>
+            }
+            else
+            {
+                var service = detail.Service;
+                var images = GetServiceImages(service.Name);
+                var currentImage = images[Math.Clamp(selectedImageIndex, 0, images.Length - 1)];
+                var avgRating = detail.AvgRating;
+                var reviewCount = detail.ReviewCount > 0 ? detail.ReviewCount : (detail.Reviews?.Count ?? 0);
+                var displayRating = reviewCount > 0 ? avgRating : (double?)null;
+                var starFillRating = displayRating.HasValue ? Math.Round(Math.Clamp(displayRating.Value, 0, 5)) : 0;
+
+                <div class="pd-bc-bar">
+                    <nav class="pd-breadcrumb" aria-label="Breadcrumb">
+                        <a href="/">Trang chủ</a>
+                        <span class="pd-bc-sep">›</span>
+                        <a href="/services">Dịch vụ</a>
+                        @if (!string.IsNullOrWhiteSpace(service.ServiceType))
+                        {
+                            <span class="pd-bc-sep">›</span>
+                            <span>@service.ServiceType</span>
+                        }
+                        <span class="pd-bc-sep">›</span>
+                        <span class="pd-bc-current">@service.Name</span>
+                    </nav>
+                </div>
+
+                <div class="pd-layout-card">
+                    <div class="pd-two-col">
+                        <div class="pd-media">
+                            <div class="pd-main-img">
+                                <img src="@currentImage" alt="@service.Name" />
+                                @if (images.Length > 1)
+                                {
+                                    <button type="button" class="pd-thumb-nav" aria-label="Ảnh trước" style="position:absolute;left:8px;top:50%;transform:translateY(-50%);z-index:2" @onclick="PrevImage">‹</button>
+                                    <button type="button" class="pd-thumb-nav" aria-label="Ảnh tiếp" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);z-index:2" @onclick="NextImage">›</button>
+                                }
+                            </div>
+
+                            @if (images.Length > 1)
+                            {
+                                <div class="pd-thumbs-row">
+                                    <div class="pd-thumbs-track">
+                                        @for (var i = 0; i < images.Length; i++)
+                                        {
+                                            var idx = i;
+                                            <button type="button"
+                                                    class="pd-thumb @(idx == selectedImageIndex ? "is-active" : null)"
+                                                    aria-label="@($"Xem ảnh {idx + 1}")"
+                                                    @onclick="() => selectedImageIndex = idx">
+                                                <img src="@images[idx]" alt="" />
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="pd-info">
+                            <div class="pd-info-head">
+                                <span class="pd-stock-pill" style="background:#4a2477">@(service.ServiceType ?? "Spa")</span>
+                                <h1 class="pd-title">@service.Name</h1>
+                            </div>
+
+                            <div class="pd-price-hero">@Vnd(service.Price)</div>
+
+                            <div class="pd-stats-row pd-stats-row--compact">
+                                @if (displayRating.HasValue)
+                                {
+                                    <div class="pd-stats-rating">
+                                        @RenderStars((int)starFillRating)
+                                        <span class="pd-rating-num">@avgRating.ToString("0.0", CultureInfo.InvariantCulture)</span>
+                                    </div>
+                                    <span class="pd-stats-muted">(@reviewCount đánh giá)</span>
+                                }
+                                else
+                                {
+                                    <span class="pd-stats-muted">Chưa có đánh giá</span>
+                                }
+                            </div>
+
+                            <div class="pd-info-block">
+                                <dl class="pd-info-line">
+                                    <dt>
+                                        <span class="pd-icon-truck" aria-hidden="true"></span>
+                                        Thời gian dịch vụ
+                                    </dt>
+                                    <dd>
+                                        <i class="fas fa-clock" style="margin-right:8px;color:#4a2477" aria-hidden="true"></i>
+                                        <strong>@(service.Duration > 0 ? $"{service.Duration} phút" : "Liên hệ")</strong>
+                                        <br />
+                                        <span style="color:var(--pd-accent);font-weight:600">Đặt lịch trước để được phục vụ tốt nhất</span>
+                                    </dd>
+                                </dl>
+                                <dl class="pd-info-line">
+                                    <dt>
+                                        <span class="pd-icon-shield" aria-hidden="true"></span>
+                                        Cam kết chất lượng
+                                    </dt>
+                                    <dd>Dịch vụ spa chuyên nghiệp cho thú cưng với đội ngũ kỹ thuật viên giàu kinh nghiệm.</dd>
+                                </dl>
+                            </div>
+
+                            @if (!string.IsNullOrWhiteSpace(service.Description))
+                            {
+                                <div class="pd-desc-block pd-desc-lead">
+                                    <h3>Mô tả dịch vụ</h3>
+                                    <div class="pd-desc-body">@service.Description</div>
+                                </div>
+                            }
+
+                            <div class="pd-purchase-card">
+                                <div class="pd-actions-row pd-actions-row--full">
+                                    <button type="button" class="pd-btn-cart" @onclick="AddToCart">
+                                        <i class="fas fa-shopping-bag" aria-hidden="true"></i>
+                                        Thêm vào giỏ spa
+                                    </button>
+                                    <button type="button" class="pd-btn-buy" @onclick="BookNow">
+                                        Đặt ngay
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <section class="pd-reviews" aria-label="Đánh giá dịch vụ">
+                    <div class="pd-reviewsHead">
+                        <h2>Đánh giá dịch vụ</h2>
+                        <div class="pd-ratingSummary">
+                            @RenderStars((int)Math.Round(avgRating))
+                            <span>@(reviewCount > 0 ? $"{avgRating:0.0}/5 ({reviewCount})" : "Chưa có đánh giá")</span>
+                        </div>
+                    </div>
+
+                    <div class="pd-reviewsBody pd-reviewsBody--form">
+                        @if (!UserSession.IsAuthenticated)
+                        {
+                            <div class="pd-emptyReviews service-reviews-section__locked">
+                                Vui lòng <a href="/login">đăng nhập</a> để đánh giá dịch vụ.
+                            </div>
+                        }
+                        else if (!reviewEligible)
+                        {
+                            <div class="pd-emptyReviews service-reviews-section__locked">
+                                Chỉ khách hàng đã hoàn thành dịch vụ mới được đánh giá.
+                            </div>
+                        }
+                        else
+                        {
+                            <form class="service-reviews-section__form pd-service-review-form" @onsubmit="SubmitReviewAsync" @onsubmit:preventDefault>
+                                <h4>Viết đánh giá của bạn</h4>
+
+                                <div class="order-hist-review-field">
+                                    <div class="order-hist-review-label">Chọn số sao</div>
+                                    <div class="order-hist-stars" @onmouseleave="() => reviewHover = 0">
+                                        @for (var i = 1; i <= 5; i++)
+                                        {
+                                            var star = i;
+                                            var active = star <= (reviewHover > 0 ? reviewHover : reviewRating);
+                                            <button type="button"
+                                                    class="order-hist-star @(active ? "order-hist-star--on" : null)"
+                                                    @onclick="() => reviewRating = star"
+                                                    @onmouseenter="() => reviewHover = star"
+                                                    aria-label="@($"{star} sao")">
+                                                ★
+                                            </button>
+                                        }
+                                        <span class="order-hist-muted">@reviewRating/5</span>
+                                    </div>
+                                </div>
+
+                                <div class="order-hist-review-field">
+                                    <label class="order-hist-review-label" for="service-review-comment">Nhận xét của bạn</label>
+                                    <textarea rows="4"
+                                              id="service-review-comment"
+                                              class="order-hist-textarea pd-service-review-textarea"
+                                              value="@reviewComment"
+                                              @oninput="(e) => reviewComment = e.Value?.ToString() ?? string.Empty"
+                                              placeholder="Chia sẻ cảm nhận của bạn về dịch vụ..."></textarea>
+                                </div>
+
+                                @if (!string.IsNullOrWhiteSpace(reviewError))
+                                {
+                                    <div class="service-reviews-section__error">@reviewError</div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(reviewSuccess))
+                                {
+                                    <div class="service-reviews-section__success">@reviewSuccess</div>
+                                }
+
+                                <button type="submit"
+                                        class="spa-bh-btn spa-bh-btn--primary pd-service-review-submit"
+                                        disabled="@reviewSubmitting"
+                                        style="background:#4a2477;border:none;color:#fff">
+                                    @(reviewSubmitting ? "Đang gửi..." : "Gửi đánh giá")
+                                </button>
+                            </form>
+                        }
+                    </div>
+
+                    <div class="pd-reviewsBody">
+                        @if (detail.Reviews is null || detail.Reviews.Count == 0)
+                        {
+                            <div class="pd-emptyReviews">Dịch vụ này chưa có đánh giá.</div>
+                        }
+                        else
+                        {
+                            @foreach (var r in detail.Reviews)
+                            {
+                                <div class="pd-reviewItem">
+                                    <div class="pd-reviewTop">
+                                        <div class="pd-reviewName">@(r.CustomerName ?? "Khách hàng")</div>
+                                        <div class="pd-reviewDate">@FormatDateTime(r.CreatedAt)</div>
+                                    </div>
+                                    <div>@RenderStars(r.Rating)</div>
+                                    @if (!string.IsNullOrWhiteSpace(r.Comment))
+                                    {
+                                        <div class="pd-reviewComment">@r.Comment</div>
+                                    }
+                                </div>
+                            }
+                        }
+                    </div>
+                </section>
+            }
+        </div>
+    </main>
+
+    <Footer />
+</div>
+
+@code {
+    private const string PlaceholderImage = "/images/placeholder.jpg";
+
+    private readonly Dictionary<string, string[]> serviceImageMap = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["spa cao cấp"] = new[] { "/images/spa-caocap1.jpg", "/images/spa-caocap2.jpg", "/images/spa-caocap3.jpg" },
+        ["tắm + vệ sinh cơ bản"] = new[] { "/images/bath1.png", "/images/bath2.jpg", "/images/bath3.jpg" },
+        ["cắt tỉa lông chuyên nghiệp"] = new[] { "/images/cut1.jpg", "/images/cut2.jpg", "/images/cut3.jpg" },
+        ["vệ sinh răng miệng"] = new[] { "/images/teeth1.jpg", "/images/teeth2.jpg", "/images/teeth3.jpg" },
+    };
+
+    [Parameter] public int Id { get; set; }
+
+    private PetShop.Models.PetServiceDetailDto? detail;
+    private bool isLoading = true;
+    private bool notFound;
+    private string? error;
+    private int selectedImageIndex;
+
+    private bool reviewEligible;
+    private int? reviewBookingId;
+    private bool reviewEligibilityPending;
+    private int reviewRating = 5;
+    private int reviewHover;
+    private string reviewComment = "";
+    private string? reviewError;
+    private string? reviewSuccess;
+    private bool reviewSubmitting;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        isLoading = true;
+        notFound = false;
+        error = null;
+        detail = null;
+        selectedImageIndex = 0;
+        ResetReviewState();
+        reviewEligibilityPending = false;
+
+        if (Id <= 0)
+        {
+            notFound = true;
+            isLoading = false;
+            return;
+        }
+
+        var result = await PetServiceClient.GetDetailAsync(Id);
+        if (!result.IsSuccess || result.Data is null)
+        {
+            if (result.StatusCode == 404)
+            {
+                notFound = true;
+            }
+            else
+            {
+                error = result.Error ?? "Không tải được chi tiết dịch vụ.";
+            }
+        }
+        else
+        {
+            detail = result.Data;
+            reviewEligibilityPending = true;
+        }
+
+        isLoading = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!reviewEligibilityPending || detail?.Service is null)
+        {
+            return;
+        }
+
+        reviewEligibilityPending = false;
+        try
+        {
+            await UserSession.LoadAsync();
+            await CheckReviewEligibilityAsync();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ServiceDetail.razor] OnAfterRenderAsync threw: {ex.GetType().Name} {ex.Message}");
+        }
+    }
+
+    private void ResetReviewState()
+    {
+        reviewEligible = false;
+        reviewBookingId = null;
+        reviewEligibilityPending = false;
+        reviewRating = 5;
+        reviewHover = 0;
+        reviewComment = "";
+        reviewError = null;
+        reviewSuccess = null;
+        reviewSubmitting = false;
+    }
+
+    private async Task CheckReviewEligibilityAsync()
+    {
+        reviewEligible = false;
+        reviewBookingId = null;
+        var customerId = UserSession.CurrentUser?.UserId ?? 0;
+        if (customerId <= 0 || detail?.Service is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var history = await SpaClient.GetHistoryAsync(customerId);
+            if (!history.IsSuccess || history.Data is null)
+            {
+                return;
+            }
+
+            var serviceId = detail.Service.ServiceId;
+            var eligible = history.Data
+                .Where(b => b.Items?.Any(i => i.ServiceId == serviceId) == true && IsReviewEligibleStatus(b.Status))
+                .OrderByDescending(b => b.AppointmentStart)
+                .ThenByDescending(b => b.CreatedAt ?? DateTime.MinValue)
+                .FirstOrDefault();
+            if (eligible is not null)
+            {
+                reviewEligible = true;
+                reviewBookingId = eligible.BookingId;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ServiceDetail.razor] CheckReviewEligibilityAsync threw: {ex.GetType().Name} {ex.Message}");
+        }
+    }
+
+    private static bool IsReviewEligibleStatus(string? status)
+    {
+        var s = (status ?? string.Empty).Trim().ToLowerInvariant();
+        return s == "hoàn thành"
+            || s == "completed"
+            || s == "đã thanh toán"
+            || s == "chờ xác nhận"
+            || s == "đã xác nhận";
+    }
+
+    private async Task SubmitReviewAsync()
+    {
+        var customerId = UserSession.CurrentUser?.UserId ?? 0;
+        if (!reviewEligible || reviewBookingId is null || customerId <= 0 || detail?.Service is null)
+        {
+            reviewError = "Bạn chưa đủ điều kiện để đánh giá dịch vụ này.";
+            return;
+        }
+
+        if (reviewRating < 1 || reviewRating > 5)
+        {
+            reviewError = "Vui lòng chọn số sao từ 1 đến 5.";
+            return;
+        }
+
+        reviewSubmitting = true;
+        reviewError = null;
+        reviewSuccess = null;
+
+        try
+        {
+            var req = new PetShop.Models.CreateSpaReviewRequest(
+                reviewBookingId.Value,
+                detail.Service.ServiceId,
+                reviewRating,
+                reviewComment ?? "");
+            var result = await SpaClient.SubmitReviewAsync(customerId, req);
+            if (result.IsSuccess)
+            {
+                reviewSuccess = "Cảm ơn bạn! Đánh giá đã được ghi nhận.";
+                reviewComment = "";
+                var refreshed = await PetServiceClient.GetDetailAsync(Id);
+                if (refreshed.IsSuccess && refreshed.Data is not null)
+                {
+                    detail = refreshed.Data;
+                }
+            }
+            else
+            {
+                reviewError = result.Error ?? "Không thể gửi đánh giá.";
+            }
+        }
+        catch (Exception ex)
+        {
+            reviewError = ex.Message;
+        }
+        finally
+        {
+            reviewSubmitting = false;
+        }
+    }
+
+    private string[] GetServiceImages(string? serviceName)
+    {
+        var name = (serviceName ?? string.Empty).Trim();
+        return serviceImageMap.TryGetValue(name, out var images)
+            ? images
+            : new[] { PlaceholderImage };
+    }
+
+    private void PrevImage()
+    {
+        var images = GetServiceImages(detail?.Service?.Name);
+        selectedImageIndex = (selectedImageIndex - 1 + images.Length) % images.Length;
+    }
+
+    private void NextImage()
+    {
+        var images = GetServiceImages(detail?.Service?.Name);
+        selectedImageIndex = (selectedImageIndex + 1) % images.Length;
+    }
+
+    private async Task AddToCart()
+    {
+        if (!UserSession.IsAuthenticated)
+        {
+            await JS.InvokeVoidAsync("alert", "Bạn cần đăng nhập để thêm dịch vụ vào giỏ spa.");
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        if (detail?.Service is null)
+        {
+            return;
+        }
+
+        await JS.InvokeAsync<int[]>("spaCart.add", detail.Service.ServiceId);
+        await JS.InvokeVoidAsync("alert", "Thêm dịch vụ vào giỏ spa thành công.");
+    }
+
+    private async Task BookNow()
+    {
+        if (!UserSession.IsAuthenticated)
+        {
+            await JS.InvokeVoidAsync("alert", "Bạn cần đăng nhập để đặt dịch vụ.");
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        if (detail?.Service is null)
+        {
+            return;
+        }
+
+        await JS.InvokeAsync<int[]>("spaCart.add", detail.Service.ServiceId);
+        Navigation.NavigateTo($"/spa-cart?serviceId={Id}");
+    }
+
+    private static MarkupString RenderStars(int rating)
+    {
+        var safe = Math.Clamp(rating, 0, 5);
+        var html = new System.Text.StringBuilder("<span class=\"pd-stars\" aria-label=\"");
+        html.Append(safe);
+        html.Append(" sao\">");
+        for (var i = 0; i < 5; i++)
+        {
+            html.Append(i < safe ? "<span class=\"on\">★</span>" : "<span>★</span>");
+        }
+        html.Append("</span>");
+        return new MarkupString(html.ToString());
+    }
+
+    private static string Vnd(decimal amount) =>
+        string.Format(new CultureInfo("vi-VN"), "{0:N0} ₫", amount);
+
+    private static string FormatDateTime(DateTime value) =>
+        value.ToString("g", new CultureInfo("vi-VN"));
+}

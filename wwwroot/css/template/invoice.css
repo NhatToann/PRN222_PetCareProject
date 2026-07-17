@@ -1,0 +1,543 @@
+/* Invoice page ported from the React sample service.css invoice block. */
+.spa-invoice-page {
+  min-height: 100vh;
+  width: 100%;
+  overflow-x: hidden;
+  background: linear-gradient(160deg, #f8f7fc 0%, #f0edf8 40%, #e8e0f5 100%);
+  padding: 0;
+}
+
+.spa-invoice-page .spa-invoice-page__main {
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px clamp(12px, 4vw, 24px) 48px;
+  box-sizing: border-box;
+}
+
+.spa-invoice-page .spa-invoice__loading {
+  text-align: center;
+  padding: 80px 20px;
+  color: #64748b;
+  font-size: 1rem;
+}
+
+.spa-invoice-page .spa-invoice__spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(74, 36, 119, 0.15);
+  border-top-color: #4a2477;
+  border-radius: 50%;
+  animation: spa-invoice-spin 0.8s linear infinite;
+  margin: 0 auto 16px;
+}
+
+@keyframes spa-invoice-spin {
+  to { transform: rotate(360deg); }
+}
+
+.spa-invoice-page .spa-invoice__error-state {
+  text-align: center;
+  padding: 60px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  color: #64748b;
+  font-size: 1rem;
+}
+
+.spa-invoice-page .spa-invoice-card {
+  background: #fff;
+  border: 0;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(74, 36, 119, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  max-width: none;
+  margin: 0;
+}
+
+.spa-invoice-page .spa-invoice-card--cancel {
+  border-top: 5px solid #ef4444;
+}
+
+.spa-invoice-page .spa-invoice-card__header {
+  background: linear-gradient(135deg, #4a2477 0%, #6b3fa0 100%);
+  padding: 28px 28px 24px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.spa-invoice-page .spa-invoice-card__header::after {
+  content: "";
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.spa-invoice-page .spa-invoice-card__header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.spa-invoice-page .spa-invoice-card__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.spa-invoice-page .spa-invoice-card__brand-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.spa-invoice-page .spa-invoice-card__brand-name {
+  display: block;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0;
+}
+
+.spa-invoice-page .spa-invoice-card__brand-sub {
+  display: block;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.65);
+  margin-top: 2px;
+}
+
+.spa-invoice-page .spa-invoice-card__meta {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.spa-invoice-page .spa-invoice-card__meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.spa-invoice-page .spa-invoice-card__meta-label {
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.55);
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.spa-invoice-page .spa-invoice-card__meta-value {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.spa-invoice-page .spa-invoice-card__booking-id {
+  font-family: "Courier New", monospace;
+  background: rgba(255, 255, 255, 0.15);
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  color: #fff;
+}
+
+.spa-invoice-page .spa-invoice-card__status-badge {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.88rem;
+  flex-shrink: 0;
+  border: 1.5px solid transparent;
+  position: relative;
+  z-index: 1;
+}
+
+.spa-invoice-page .spa-invoice-card__status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.spa-invoice-page .spa-invoice-card__status-badge.is-paid {
+  background: rgba(255, 255, 255, 0.18);
+  color: #e9d5ff;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.spa-invoice-page .spa-invoice-card__status-badge.is-cancel {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.spa-invoice-page .spa-invoice-card__status-badge:not(.is-paid):not(.is-cancel) {
+  background: rgba(255, 255, 255, 0.18);
+  color: #f3e8ff;
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.spa-invoice-page .spa-invoice-card__alert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff7ed;
+  color: #c2410c;
+  padding: 13px 20px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.spa-invoice-page .spa-invoice-card__alert svg {
+  flex-shrink: 0;
+}
+
+.spa-invoice-page .spa-invoice-card__info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border-bottom: 1px solid #f0e8ff;
+}
+
+.spa-invoice-page .spa-invoice-card__info-section {
+  padding: 22px 24px;
+}
+
+.spa-invoice-page .spa-invoice-card__info-section + .spa-invoice-card__info-section {
+  border-left: 1px solid #f0e8ff;
+}
+
+.spa-invoice-page .spa-invoice-card__section-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #4a2477;
+  text-transform: uppercase;
+  letter-spacing: 0;
+  margin: 0 0 14px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #ede9fe;
+}
+
+.spa-invoice-page .spa-invoice-card__info-table {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.spa-invoice-page .spa-invoice-card__info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 0.9rem;
+}
+
+.spa-invoice-page .spa-invoice-card__info-row span {
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.spa-invoice-page .spa-invoice-card__info-row strong {
+  color: #1e1b4b;
+  font-weight: 700;
+  text-align: right;
+  word-break: break-word;
+}
+
+.spa-invoice-page .spa-invoice-card__services {
+  padding: 22px 24px;
+  border-bottom: 1px solid #f0e8ff;
+}
+
+.spa-invoice-page .spa-invoice-card__table {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #f0e8ff;
+  margin-top: 4px;
+}
+
+.spa-invoice-page .spa-invoice-card__table-head,
+.spa-invoice-page .spa-invoice-card__table-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 120px 120px;
+  gap: 12px;
+  align-items: center;
+}
+
+.spa-invoice-page .spa-invoice-card__table-head {
+  padding: 10px 16px;
+  background: #f5f0ff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #6b3fa0;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.spa-invoice-page .spa-invoice-card__table-head span:last-child,
+.spa-invoice-page .spa-invoice-card__table-head span:nth-child(3) {
+  text-align: right;
+}
+
+.spa-invoice-page .spa-invoice-card__table-row {
+  padding: 12px 16px;
+  border-top: 1px solid #f0e8ff;
+  font-size: 0.9rem;
+}
+
+.spa-invoice-page .spa-invoice-card__table-row:nth-child(even) {
+  background: #faf8ff;
+}
+
+.spa-invoice-page .spa-invoice-card__table-row span:nth-child(3),
+.spa-invoice-page .spa-invoice-card__table-row span:last-child {
+  text-align: right;
+}
+
+.spa-invoice-page .spa-invoice-card__table-row strong {
+  text-align: right;
+  color: #1e1b4b;
+  font-weight: 700;
+}
+
+.spa-invoice-page .spa-invoice-card__service-name {
+  color: #4a2477;
+  font-weight: 600;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.spa-invoice-page .spa-invoice-card__totals {
+  padding: 20px 24px;
+  border-bottom: 1px solid #f0e8ff;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.spa-invoice-page .spa-invoice-card__total-row {
+  display: flex;
+  justify-content: space-between;
+  width: 280px;
+  font-size: 0.92rem;
+}
+
+.spa-invoice-page .spa-invoice-card__total-row span {
+  color: #475569;
+}
+
+.spa-invoice-page .spa-invoice-card__total-row span:last-child {
+  font-weight: 600;
+  color: #1e1b4b;
+}
+
+.spa-invoice-page .spa-invoice-card__total-row--muted span,
+.spa-invoice-page .spa-invoice-card__total-row--muted span:last-child {
+  color: #94a3b8;
+}
+
+.spa-invoice-page .spa-invoice-card__grand-total {
+  display: flex;
+  justify-content: space-between;
+  width: 280px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #4a2477, #6b3fa0);
+  border-radius: 12px;
+  margin-top: 4px;
+}
+
+.spa-invoice-page .spa-invoice-card__grand-total span {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.spa-invoice-page .spa-invoice-card__grand-total strong {
+  color: #fff;
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.spa-invoice-page .spa-invoice-card__footer {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+.spa-invoice-page .spa-invoice-card__thanks {
+  color: #94a3b8;
+  font-size: 0.85rem;
+  font-style: italic;
+  margin: 0;
+}
+
+.spa-invoice-page .spa-invoice-card__actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.spa-invoice-page .spa-invoice-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 24px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 0.92rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-decoration: none;
+  border: none;
+  font-family: inherit;
+}
+
+.spa-invoice-page .spa-invoice-btn--outline {
+  background: transparent;
+  color: #4a2477;
+  border: 2px solid #d4c4f5;
+}
+
+.spa-invoice-page .spa-invoice-btn--outline:hover {
+  background: #f5f0ff;
+  border-color: #4a2477;
+  color: #4a2477;
+  text-decoration: none;
+}
+
+.spa-invoice-page .spa-invoice-btn--primary {
+  background: linear-gradient(135deg, #4a2477, #6b3fa0);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(74, 36, 119, 0.3);
+}
+
+.spa-invoice-page .spa-invoice-btn--primary:hover {
+  background: linear-gradient(135deg, #3b1d63, #5a3290);
+  box-shadow: 0 6px 20px rgba(74, 36, 119, 0.4);
+  transform: translateY(-1px);
+  color: #fff;
+  text-decoration: none;
+}
+
+@media (max-width: 720px) {
+  .spa-invoice-page .spa-invoice-page__main {
+    gap: 12px;
+  }
+
+  .spa-invoice-page .spa-invoice-card__header {
+    flex-direction: column;
+    gap: 16px;
+    padding: 22px 20px;
+  }
+
+  .spa-invoice-page .spa-invoice-card__header-left {
+    width: 100%;
+  }
+
+  .spa-invoice-page .spa-invoice-card__status-badge {
+    align-self: flex-start;
+  }
+
+  .spa-invoice-page .spa-invoice-card__info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .spa-invoice-page .spa-invoice-card__info-section + .spa-invoice-card__info-section {
+    border-left: none;
+    border-top: 1px solid #f0e8ff;
+  }
+
+  .spa-invoice-page .spa-invoice-card__table-head,
+  .spa-invoice-page .spa-invoice-card__table-row {
+    grid-template-columns: 36px minmax(0, 1fr) 92px 92px;
+    gap: 8px;
+    font-size: 0.82rem;
+    padding: 9px 12px;
+  }
+
+  .spa-invoice-page .spa-invoice-card__table-head span:nth-child(3),
+  .spa-invoice-page .spa-invoice-card__table-row span:nth-child(3) {
+    text-align: right;
+  }
+
+  .spa-invoice-page .spa-invoice-card__totals {
+    padding: 16px;
+    align-items: stretch;
+  }
+
+  .spa-invoice-page .spa-invoice-card__total-row,
+  .spa-invoice-page .spa-invoice-card__grand-total {
+    width: 100%;
+  }
+
+  .spa-invoice-page .spa-invoice-card__footer {
+    padding: 16px;
+  }
+
+  .spa-invoice-page .spa-invoice-card__actions {
+    flex-direction: column;
+  }
+
+  .spa-invoice-page .spa-invoice-btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 520px) {
+  .spa-invoice-page .spa-invoice-card__table {
+    overflow-x: auto;
+  }
+
+  .spa-invoice-page .spa-invoice-card__table-head,
+  .spa-invoice-page .spa-invoice-card__table-row {
+    min-width: 480px;
+  }
+}
+
+@media print {
+  .spa-invoice-page {
+    padding: 0;
+    background: #fff;
+  }
+
+  .spa-invoice-page .top-bar,
+  .spa-invoice-page .page-context-bar,
+  .spa-invoice-page footer,
+  .spa-invoice-page .spa-invoice-card__footer {
+    display: none;
+  }
+
+  .spa-invoice-page .spa-invoice-card {
+    box-shadow: none;
+    border-radius: 0;
+  }
+}

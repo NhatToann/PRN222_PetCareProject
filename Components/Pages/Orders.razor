@@ -1,0 +1,707 @@
+@page "/account/orders"
+@page "/account/orders/{OrderId:int}"
+@inject PetShop.Services.UserSessionService UserSession
+@inject PetShop.Interfaces.IOrderClient OrderClient
+@inject PetShop.Interfaces.IReviewClient ReviewClient
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@using System.Globalization
+@using System.Text
+@using PetShop.Models
+
+<PageTitle>@(OrderId is null ? "Lịch sử đơn hàng" : "Chi tiết đơn hàng")</PageTitle>
+
+<div class="home-page @(OrderId is null ? "spa-bh-page order-shopee-page" : "order-detail-page")">
+    <TopBar />
+    <PageContextBar Title="@(OrderId is null ? "Lịch sử đơn hàng" : "Chi tiết đơn hàng")" />
+
+    <CustomerOnlyGuard>
+        @if (OrderId is null)
+        {
+            <main class="spa-bh-main">
+                <div class="container spa-bh-container">
+                    <div class="spa-bh-tabs-wrap">
+                        <div class="spa-bh-tabs" role="tablist">
+                            @foreach (var tab in Tabs)
+                            {
+                                var selected = activeTab == tab.Id;
+                                var count = CountForTab(tab.Id);
+                                <button type="button"
+                                        role="tab"
+                                        aria-selected="@selected"
+                                        class="spa-bh-tab @(selected ? "spa-bh-tab--active" : null)"
+                                        @onclick="() => activeTab = tab.Id">
+                                    @tab.Label
+                                    @if (tab.Id != "all" && count > 0)
+                                    {
+                                        <span class="spa-bh-tab__count">(@count)</span>
+                                    }
+                                </button>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="spa-bh-search">
+                        <i class="fas fa-search spa-bh-search__icon" aria-hidden="true"></i>
+                        <input type="search"
+                               class="spa-bh-search__input"
+                               placeholder="Bạn có thể tìm kiếm theo tên Shop, ID đơn hàng hoặc Tên Sản phẩm"
+                               @bind-value="search"
+                               @bind-value:event="oninput" />
+                    </div>
+
+                    @if (!loaded)
+                    {
+                        <div class="spa-bh-empty order-hist-loading">
+                            <p>Đang tải đơn hàng...</p>
+                        </div>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(error))
+                    {
+                        <div class="spa-bh-empty">
+                            <p>@error</p>
+                        </div>
+                    }
+                    else if (FilteredOrders.Count == 0)
+                    {
+                        <div class="spa-bh-empty">
+                            <i class="fas fa-shopping-bag spa-bh-empty__icon" aria-hidden="true" style="color:#4a2477"></i>
+                            <p>@(orders.Count == 0 ? "Bạn chưa có đơn hàng nào." : "Không có đơn phù hợp bộ lọc hoặc từ khóa tìm kiếm.")</p>
+                            <a href="/products" class="spa-bh-empty__cta order-shopee-empty-cta">Mua sắm ngay</a>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="order-shopee-list">
+                            @foreach (var order in FilteredOrders)
+                            {
+                                var statusText = order.Status ?? "Chưa cập nhật";
+                                var lines = LineCount(order);
+                                var more = lines > 1 ? lines - 1 : 0;
+                                <article class="order-shopee-card">
+                                    <div class="order-shopee-card__inner"
+                                         role="link"
+                                         tabindex="0"
+                                         @onclick="() => NavigateToOrder(order.OrderId)"
+                                         @onkeydown="(e) => OpenOrderOnKey(e, order.OrderId)">
+                                        <header class="order-shopee-card__head">
+                                            <div class="order-shopee-card__shop">
+                                                <span class="order-shopee-card__badge">Yêu thích</span>
+                                                <span class="order-shopee-card__shop-name">Pet Toy Shop</span>
+                                                <button type="button"
+                                                        class="order-shopee-card__linkish"
+                                                        @onclick:stopPropagation="true"
+                                                        @onclick="GoHome">
+                                                    Xem Shop
+                                                </button>
+                                            </div>
+                                            <div class="order-shopee-card__status-col">
+                                                <span class="order-shopee-card__ship">
+                                                    <i class="fas fa-truck order-shopee-card__ship-icon" aria-hidden="true"></i>
+                                                    @ShipHint(statusText)
+                                                </span>
+                                            </div>
+                                        </header>
+
+                                        <div class="order-shopee-card__body">
+                                            <div class="order-shopee-row">
+                                                <div class="order-shopee-row__thumb">
+                                                    @if (!string.IsNullOrWhiteSpace(order.PrimaryProductImageUrl))
+                                                    {
+                                                        <img src="@order.PrimaryProductImageUrl" alt="" />
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="order-shopee-row__placeholder">■</span>
+                                                    }
+                                                </div>
+                                                <div class="order-shopee-row__info">
+                                                    <div class="order-shopee-row__title">@PrimaryName(order)</div>
+                                                    <div class="order-shopee-row__meta">
+                                                        @(more > 0 ? $"{more} sản phẩm khác · " : null)Đặt lúc @FormatDateShort(order.OrderDate)
+                                                    </div>
+                                                    <div class="order-shopee-row__qty">@(lines == 1 ? "x1" : $"{lines} mặt hàng")</div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <footer class="order-shopee-card__foot">
+                                            <span class="order-shopee-card__hint">
+                                                Mã đơn #@order.OrderId · @(order.PaymentMethod ?? "—")
+                                            </span>
+                                            <div class="order-shopee-card__total-row">
+                                                <span class="order-shopee-card__total-label">Thành tiền:</span>
+                                                <span class="order-shopee-card__total-val" style="color:#4a2477">
+                                                    @Vnd(order.TotalAmount)
+                                                </span>
+                                            </div>
+                                        </footer>
+                                    </div>
+                                </article>
+                            }
+                        </div>
+                    }
+                </div>
+            </main>
+        }
+        else
+        {
+            <main class="spa-cart-page">
+                <div class="container">
+                    @if (!loaded)
+                    {
+                        <div class="spa-cart-page__empty">
+                            <p>Đang tải chi tiết đơn hàng...</p>
+                        </div>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(error) || detail is null)
+                    {
+                        <div class="spa-cart-page__empty">
+                            <p>@(error ?? "Không tìm thấy đơn hàng.")</p>
+                            <a href="/account/orders" class="spa-bh-btn spa-bh-btn--primary" style="margin-top:12px">
+                                Quay lại lịch sử đơn hàng
+                            </a>
+                        </div>
+                    }
+                    else
+                    {
+                        var firstItem = detail.Items.FirstOrDefault();
+                        var statusClass = StatusClass(detail.Status);
+                        <div class="spa-history">
+                            <article class="order-detail-spa-card">
+                                <header class="order-detail-spa-card__head">
+                                    <div class="order-detail-spa-card__shop">
+                                        <span class="order-detail-spa-card__badge">Pet Toy Shop</span>
+                                        <a href="/" class="spa-bh-btn spa-bh-btn--outline order-detail-spa-card__shop-link">Xem Shop</a>
+                                    </div>
+                                    <div class="order-detail-spa-card__status-block">
+                                        <span class="spa-history-card__status @statusClass">@(detail.Status ?? "—")</span>
+                                    </div>
+                                </header>
+
+                                <div class="order-detail-spa-card__grid">
+                                    <section class="spa-history-card__media">
+                                        <div class="spa-history-card__image" style="padding:0;overflow:hidden;background:#f1f5f9">
+                                            @if (!string.IsNullOrWhiteSpace(firstItem?.ImageUrl))
+                                            {
+                                                <img src="@firstItem.ImageUrl" alt="@(firstItem.ProductName ?? "")" style="width:100%;height:100%;object-fit:cover" />
+                                            }
+                                            else
+                                            {
+                                                <span style="font-size:2rem">■</span>
+                                            }
+                                        </div>
+
+                                        <div class="spa-history-card__info">
+                                            <h3>@(firstItem?.ProductName ?? "Đơn hàng")</h3>
+                                            <p><strong>Mã đơn:</strong> #@detail.OrderId</p>
+                                            <p><strong>Ngày đặt:</strong> @FormatDate(detail.OrderDate)</p>
+                                            <p><strong>Địa chỉ giao hàng:</strong> @(detail.ShippingAddress ?? "Chưa cập nhật")</p>
+                                            @if (detail.Items.Count > 1)
+                                            {
+                                                <p class="order-detail-spa-card__more">+@(detail.Items.Count - 1) sản phẩm khác trong đơn</p>
+                                            }
+                                        </div>
+                                    </section>
+
+                                    <section class="spa-history-card__invoice">
+                                        <div class="spa-history-card__invoice-grid">
+                                            <div>
+                                                <span>Tổng tiền</span>
+                                                <strong>@Vnd(detail.TotalAmount)</strong>
+                                            </div>
+                                            <div>
+                                                <span>Thanh toán</span>
+                                                <strong>@(detail.PaymentMethod ?? "—")</strong>
+                                            </div>
+                                            <div>
+                                                <span>Trạng thái thanh toán</span>
+                                                <strong>@(detail.PaymentStatus ?? "—")</strong>
+                                            </div>
+                                        </div>
+
+                                        @if (CanMarkDelivered(detail.Status))
+                                        {
+                                            <p class="order-detail-spa-card__hint">
+                                                Chỉ bấm "Đã nhận hàng" khi bạn đã nhận được kiện hàng.
+                                            </p>
+                                        }
+
+                                        <div class="spa-history-card__actions order-detail-spa-card__actions">
+                                            <a href="/account/orders" class="spa-bh-btn spa-bh-btn--outline">Quay lại lịch sử</a>
+
+                                            @if (CanMarkDelivered(detail.Status))
+                                            {
+                                                <button type="button"
+                                                        class="spa-bh-btn spa-bh-btn--primary order-detail-spa-card__cta-primary"
+                                                        @onclick="MarkDeliveredAsync"
+                                                        disabled="@deliveredConfirming">
+                                                    @(deliveredConfirming ? "Đang xác nhận..." : "Đã nhận hàng")
+                                                </button>
+                                            }
+                                        </div>
+                                    </section>
+                                </div>
+
+                                <section class="order-detail-full-row">
+                                    <h4 class="order-detail-lines__title">Sản phẩm</h4>
+                                    <div class="order-hist-items order-detail-lines">
+                                        @foreach (var item in detail.Items)
+                                        {
+                                            <div class="order-hist-line">
+                                                <div class="order-hist-line__main">
+                                                    @if (!string.IsNullOrWhiteSpace(item.ImageUrl))
+                                                    {
+                                                        <div class="order-hist-line__thumb">
+                                                            <img src="@item.ImageUrl" alt="@item.ProductName" />
+                                                        </div>
+                                                    }
+                                                    <div>
+                                                        <div class="order-hist-line__title">@item.ProductName</div>
+                                                        <div class="order-hist-line__meta">Số lượng: x@(item.Quantity)</div>
+                                                        <div class="order-hist-line__meta">Đơn giá: @Vnd(item.UnitPrice)</div>
+                                                    </div>
+                                                </div>
+                                                <div class="order-hist-line__total">@Vnd(item.Quantity * item.UnitPrice)</div>
+                                            </div>
+                                        }
+                                    </div>
+                                </section>
+
+                                @if (IsOrderCompleted(detail.Status))
+                                {
+                                    <section class="order-detail-full-row">
+                                        <div class="order-hist-reviews">
+                                            <h3 class="order-hist-reviews__title">Đánh giá sản phẩm</h3>
+
+                                            @if (reviewsLoading)
+                                            {
+                                                <div class="order-hist-muted">Đang tải đánh giá...</div>
+                                            }
+                                            else
+                                            {
+                                                <div class="order-hist-review-list">
+                                                    @foreach (var item in DistinctItems(detail.Items))
+                                                    {
+                                                        var productId = item.ProductId;
+                                                        var existing = reviewsByProductId.TryGetValue(productId, out var review) ? review : null;
+                                                        var ratingValue = reviewRatingsByProductId.TryGetValue(productId, out var rating) ? rating : 5;
+                                                        var commentValue = reviewCommentsByProductId.TryGetValue(productId, out var comment) ? comment : string.Empty;
+                                                        var alreadyRated = existing is not null;
+                                                        var submitting = reviewSubmittingByProductId.Contains(productId);
+
+                                                        <div class="order-hist-review-card">
+                                                            <div class="order-hist-review-card__head">
+                                                                <div>
+                                                                    <div class="order-hist-review-card__name">@item.ProductName</div>
+                                                                    <div class="order-hist-review-card__sub">Số lượng: @item.Quantity</div>
+                                                                </div>
+                                                                @if (alreadyRated)
+                                                                {
+                                                                    <span class="order-hist-muted">Đã đánh giá</span>
+                                                                }
+                                                            </div>
+
+                                                            <div class="order-hist-review-field">
+                                                                <div class="order-hist-review-label">Số sao</div>
+                                                                <div class="order-hist-stars">
+                                                                    @for (var i = 1; i <= 5; i++)
+                                                                    {
+                                                                        var value = i;
+                                                                        var on = value <= ratingValue;
+                                                                        <button type="button"
+                                                                                disabled="@(alreadyRated || submitting)"
+                                                                                @onclick="() => SetReviewRating(productId, value)"
+                                                                                class="order-hist-star @(on ? "order-hist-star--on order-detail-star--on" : null)">
+                                                                            ★
+                                                                        </button>
+                                                                    }
+                                                                    <span class="order-hist-muted">@ratingValue/5</span>
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="order-hist-review-field">
+                                                                <div class="order-hist-review-label">Nội dung</div>
+                                                                <textarea rows="3"
+                                                                          placeholder="Nhận xét của bạn..."
+                                                                          disabled="@(alreadyRated || submitting)"
+                                                                          value="@commentValue"
+                                                                          @oninput="(e) => SetReviewComment(productId, e.Value?.ToString() ?? string.Empty)"
+                                                                          class="order-hist-textarea"></textarea>
+                                                            </div>
+
+                                                            <button type="button"
+                                                                    disabled="@(alreadyRated || submitting)"
+                                                                    @onclick="() => SubmitReviewAsync(productId)"
+                                                                    class="spa-bh-btn spa-bh-btn--primary order-hist-btn-full order-detail-spa-card__cta-primary">
+                                                                @(submitting ? "Đang gửi..." : "Gửi đánh giá")
+                                                            </button>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    </section>
+                                }
+                            </article>
+                        </div>
+                    }
+                </div>
+            </main>
+        }
+
+        <Footer />
+    </CustomerOnlyGuard>
+</div>
+
+@code {
+    [Parameter] public int? OrderId { get; set; }
+
+    private readonly (string Id, string Label)[] Tabs =
+    {
+        ("all", "Tất cả"),
+        ("unpaid", "Chờ thanh toán"),
+        ("pending_confirm", "Chờ xác nhận"),
+        ("shipping", "Chờ giao hàng"),
+        ("done", "Hoàn thành"),
+        ("cancel", "Đã hủy"),
+    };
+
+    private bool loaded;
+    private bool pendingLoad = true;
+    private string? error;
+    private string activeTab = "all";
+    private string search = "";
+    private IReadOnlyList<FrontendOrderSummary> orders = Array.Empty<FrontendOrderSummary>();
+    private FrontendOrderDetail? detail;
+    private int? loadedOrderId = -1;
+    private bool deliveredConfirming;
+    private bool reviewsLoading;
+    private readonly Dictionary<int, ReviewDisplayDto?> reviewsByProductId = new();
+    private readonly Dictionary<int, int> reviewRatingsByProductId = new();
+    private readonly Dictionary<int, string> reviewCommentsByProductId = new();
+    private readonly HashSet<int> reviewSubmittingByProductId = new();
+
+    private List<FrontendOrderSummary> FilteredOrders =>
+        orders.Where(o => MatchesOrderTab(activeTab, o) && OrderMatchesSearch(o, search)).ToList();
+
+    protected override Task OnParametersSetAsync()
+    {
+        if (loadedOrderId != OrderId)
+        {
+            loadedOrderId = OrderId;
+            loaded = false;
+            pendingLoad = true;
+            error = null;
+            detail = null;
+            orders = Array.Empty<FrontendOrderSummary>();
+            ClearReviewState();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!pendingLoad)
+        {
+            return;
+        }
+
+        pendingLoad = false;
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        loaded = false;
+        error = null;
+        ClearReviewState();
+
+        try
+        {
+            await UserSession.LoadAsync();
+            var customerId = UserSession.CurrentUser?.UserId ?? 0;
+            if (customerId <= 0)
+            {
+                loaded = true;
+                return;
+            }
+
+            if (OrderId is int orderId)
+            {
+                var result = await OrderClient.GetDetailAsync(orderId, customerId);
+                if (result.IsSuccess && result.Data is not null)
+                {
+                    detail = result.Data;
+                    if (IsOrderCompleted(detail.Status))
+                    {
+                        await LoadProductReviewsAsync();
+                    }
+                }
+                else
+                {
+                    error = result.Error ?? "Không tải được chi tiết đơn hàng.";
+                }
+            }
+            else
+            {
+                var result = await OrderClient.GetHistoryAsync(customerId);
+                if (result.IsSuccess)
+                {
+                    orders = result.Data ?? Array.Empty<FrontendOrderSummary>();
+                }
+                else
+                {
+                    error = result.Error ?? "Không tải được danh sách đơn hàng.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            loaded = true;
+        }
+    }
+
+    private async Task MarkDeliveredAsync()
+    {
+        if (detail is null || deliveredConfirming)
+        {
+            return;
+        }
+
+        var customerId = UserSession.CurrentUser?.UserId ?? 0;
+        if (customerId <= 0)
+        {
+            Navigation.NavigateTo("/login", forceLoad: true);
+            return;
+        }
+
+        deliveredConfirming = true;
+        try
+        {
+            var result = await OrderClient.MarkDeliveredAsync(detail.OrderId, customerId);
+            if (!result.IsSuccess)
+            {
+                await JS.InvokeVoidAsync("alert", result.Error ?? "Xác nhận không thành công.");
+                return;
+            }
+
+            var refreshed = await OrderClient.GetDetailAsync(detail.OrderId, customerId);
+            if (refreshed.IsSuccess && refreshed.Data is not null)
+            {
+                detail = refreshed.Data;
+                if (IsOrderCompleted(detail.Status))
+                {
+                    await LoadProductReviewsAsync();
+                }
+            }
+        }
+        finally
+        {
+            deliveredConfirming = false;
+        }
+    }
+
+    private async Task LoadProductReviewsAsync()
+    {
+        if (detail is null)
+        {
+            return;
+        }
+
+        var customerId = UserSession.CurrentUser?.UserId ?? 0;
+        if (customerId <= 0)
+        {
+            return;
+        }
+
+        reviewsLoading = true;
+        reviewsByProductId.Clear();
+        reviewRatingsByProductId.Clear();
+        reviewCommentsByProductId.Clear();
+
+        try
+        {
+            foreach (var productId in detail.Items.Select(i => i.ProductId).Where(i => i > 0).Distinct())
+            {
+                var result = await ReviewClient.GetProductReviewsAsync(productId);
+                var myReview = result.Data?.FirstOrDefault(r => r.CustomerId == customerId);
+                reviewsByProductId[productId] = myReview;
+                reviewRatingsByProductId[productId] = myReview?.Rating is > 0 ? myReview.Rating : 5;
+                reviewCommentsByProductId[productId] = myReview?.Comment ?? "";
+            }
+        }
+        finally
+        {
+            reviewsLoading = false;
+        }
+    }
+
+    private async Task SubmitReviewAsync(int productId)
+    {
+        if (detail is null)
+        {
+            return;
+        }
+
+        var customerId = UserSession.CurrentUser?.UserId ?? 0;
+        var rating = reviewRatingsByProductId.TryGetValue(productId, out var selectedRating) ? selectedRating : 0;
+        var comment = reviewCommentsByProductId.TryGetValue(productId, out var selectedComment) ? selectedComment : "";
+
+        if (customerId <= 0)
+        {
+            Navigation.NavigateTo("/login", forceLoad: true);
+            return;
+        }
+
+        if (rating < 1 || rating > 5)
+        {
+            await JS.InvokeVoidAsync("alert", "Vui lòng chọn số sao (1-5).");
+            return;
+        }
+
+        reviewSubmittingByProductId.Add(productId);
+        try
+        {
+            var request = new CreateProductReviewRequestDto(detail.OrderId, rating, comment);
+            var result = await ReviewClient.UpsertProductReviewAsync(productId, customerId, request);
+            if (!result.IsSuccess)
+            {
+                await JS.InvokeVoidAsync("alert", result.Error ?? "Gửi đánh giá thất bại.");
+                return;
+            }
+
+            var refreshed = await ReviewClient.GetProductReviewsAsync(productId);
+            var myReview = refreshed.Data?.FirstOrDefault(r => r.CustomerId == customerId);
+            reviewsByProductId[productId] = myReview;
+            reviewRatingsByProductId[productId] = myReview?.Rating is > 0 ? myReview.Rating : rating;
+            reviewCommentsByProductId[productId] = myReview?.Comment ?? comment;
+        }
+        finally
+        {
+            reviewSubmittingByProductId.Remove(productId);
+        }
+    }
+
+    private void ClearReviewState()
+    {
+        reviewsLoading = false;
+        reviewsByProductId.Clear();
+        reviewRatingsByProductId.Clear();
+        reviewCommentsByProductId.Clear();
+        reviewSubmittingByProductId.Clear();
+    }
+
+    private void SetReviewRating(int productId, int rating) => reviewRatingsByProductId[productId] = rating;
+
+    private void SetReviewComment(int productId, string comment) => reviewCommentsByProductId[productId] = comment;
+
+    private void OpenOrderOnKey(KeyboardEventArgs e, int orderId)
+    {
+        if (e.Key is "Enter" or " ")
+        {
+            NavigateToOrder(orderId);
+        }
+    }
+
+    private void NavigateToOrder(int orderId) => Navigation.NavigateTo($"/account/orders/{orderId}");
+
+    private void GoHome() => Navigation.NavigateTo("/");
+
+    private int CountForTab(string tabId) => orders.Count(o => MatchesOrderTab(tabId, o));
+
+    private static IEnumerable<FrontendOrderDetailItem> DistinctItems(IReadOnlyList<FrontendOrderDetailItem> items) =>
+        items.GroupBy(i => i.ProductId).Select(g => g.First());
+
+    private static bool MatchesOrderTab(string tabId, FrontendOrderSummary order)
+    {
+        var status = NormalizeVietnamese(order.Status);
+        var payStatus = NormalizeVietnamese(order.PaymentStatus);
+
+        return tabId switch
+        {
+            "all" => true,
+            "cancel" => status.Contains("huy"),
+            "done" => status.Contains("hoan thanh") || status.Contains("da nhan") || status.Contains("hoan tat") || status.Contains("completed"),
+            "unpaid" => payStatus.Contains("chua thanh toan") || payStatus.Contains("cho thanh toan") || payStatus == "pending" || status.Contains("cho thanh toan") || status.Contains("chua thanh toan"),
+            "pending_confirm" => status.Contains("cho xac nhan"),
+            "shipping" => status.Contains("cho giao hang"),
+            _ => true,
+        };
+    }
+
+    private static bool OrderMatchesSearch(FrontendOrderSummary order, string query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return true;
+        }
+
+        var q = NormalizeVietnamese(query);
+        return NormalizeVietnamese(order.OrderId.ToString(CultureInfo.InvariantCulture)).Contains(q)
+            || NormalizeVietnamese(order.Status).Contains(q)
+            || NormalizeVietnamese(order.PaymentMethod).Contains(q)
+            || NormalizeVietnamese(order.PaymentStatus).Contains(q)
+            || NormalizeVietnamese(PrimaryName(order)).Contains(q)
+            || NormalizeVietnamese(order.OrderDate.ToString("g", new CultureInfo("vi-VN"))).Contains(q);
+    }
+
+    private static string ShipHint(string? status)
+    {
+        var s = NormalizeVietnamese(status);
+        if (s.Contains("huy")) return "Đơn đã hủy";
+        if (s.Contains("hoan thanh") || s.Contains("da nhan") || s.Contains("hoan tat")) return "Giao hàng thành công";
+        if (s.Contains("cho giao")) return "Đang giao đến bạn";
+        if (s.Contains("cho xac nhan")) return "Đang chờ shop xác nhận";
+        return "Đang xử lý";
+    }
+
+    private static bool CanMarkDelivered(string? status) => NormalizeVietnamese(status).Trim() == "cho giao hang";
+
+    private static bool IsOrderCompleted(string? status)
+    {
+        var normalized = NormalizeVietnamese(status).Trim();
+        return normalized == "hoan thanh" || normalized == "completed" || normalized.Contains("da nhan") || normalized.Contains("hoan tat");
+    }
+
+    private static string StatusClass(string? status)
+    {
+        var normalized = NormalizeVietnamese(status);
+        if (normalized.Contains("huy")) return "is-cancel";
+        if (IsOrderCompleted(status)) return "is-paid";
+        return "";
+    }
+
+    private static string PrimaryName(FrontendOrderSummary order) =>
+        string.IsNullOrWhiteSpace(order.PrimaryProductName) ? "Sản phẩm" : order.PrimaryProductName!;
+
+    private static int LineCount(FrontendOrderSummary order) => order.ProductLineCount > 0 ? order.ProductLineCount : 1;
+
+    private static string FormatDateShort(DateTime value) => value.ToString("dd/MM/yyyy HH:mm", new CultureInfo("vi-VN"));
+
+    private static string FormatDate(DateTime value) => value.ToString("g", new CultureInfo("vi-VN"));
+
+    private static string Vnd(decimal amount) =>
+        string.Format(new CultureInfo("vi-VN"), "{0:N0} ₫", amount);
+
+    private static string NormalizeVietnamese(string? value)
+    {
+        var normalized = (value ?? string.Empty).Trim().ToLowerInvariant().Normalize(NormalizationForm.FormD);
+        var sb = new StringBuilder(normalized.Length);
+        foreach (var ch in normalized)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(ch) != UnicodeCategory.NonSpacingMark)
+            {
+                sb.Append(ch);
+            }
+        }
+
+        return sb.ToString().Replace("đ", "d");
+    }
+}

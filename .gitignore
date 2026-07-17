@@ -1,0 +1,31 @@
+# Build results
+bin/
+obj/
+
+# IDE / Editor
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Blazor WebAssembly
+wwwroot/appsettings*.json
+
+# User-specific secrets — NEVER commit
+appsettings.json
+appsettings.Development.json
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary / cache
+*.tmp
+*.temp
+.tmp-*/

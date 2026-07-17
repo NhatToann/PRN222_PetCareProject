@@ -1,0 +1,31 @@
+@page "/orders"
+@page "/profile"
+@inject NavigationManager Navigation
+
+<PageTitle>Redirecting</PageTitle>
+
+<section class="section-block">
+    <p>Redirecting...</p>
+</section>
+
+@code {
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        var path = new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/').ToLowerInvariant();
+        var target = path switch
+        {
+            "/orders" => "/system",
+            "/profile" => "/profile/edit",
+            _ => "/"
+        };
+
+        Navigation.NavigateTo(target, replace: true);
+    }
+}

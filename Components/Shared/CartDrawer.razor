@@ -1,0 +1,140 @@
+@using Microsoft.JSInterop;
+@inject PetShop.Services.CartStateService CartState
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@implements IDisposable
+
+@if (!_isReady)
+{
+    <div class="cart-drawer-root" role="dialog" aria-modal="true" aria-labelledby="cart-drawer-title">
+        <div class="cart-drawer">
+            <header class="cart-drawer__header">
+                <h2 id="cart-drawer-title" class="cart-drawer__title">Giỏ hàng</h2>
+            </header>
+            <div class="cart-drawer__body">
+                <p style="padding:20px;text-align:center;color:#888;">Đang tải…</p>
+            </div>
+        </div>
+    </div>
+}
+else if (Open)
+{
+    <div class="cart-drawer-root" role="dialog" aria-modal="true" aria-labelledby="cart-drawer-title">
+        <button type="button" class="cart-drawer-backdrop" aria-label="Đóng giỏ hàng" @onclick="CloseAsync"></button>
+        <div class="cart-drawer">
+            <header class="cart-drawer__header">
+                <h2 id="cart-drawer-title" class="cart-drawer__title">Giỏ hàng</h2>
+                <button type="button" class="cart-drawer__close" @onclick="CloseAsync" aria-label="Đóng">
+                    <span class="cart-drawer__close-label">Đóng</span>
+                    <span class="cart-drawer__close-icon" aria-hidden="true">×</span>
+                </button>
+            </header>
+
+            <div class="cart-drawer__body">
+                @if (CartState.Items.Count == 0)
+                {
+                    <div class="cart-drawer__empty">
+                        <p class="cart-drawer__empty-title">Giỏ hàng trống</p>
+                        <p class="cart-drawer__empty-hint">Thêm sản phẩm để xem tại đây.</p>
+                    </div>
+                }
+                else
+                {
+                    <ul class="cart-drawer__list">
+                        @foreach (var item in CartState.Items)
+                        {
+                            <li class="cart-drawer__item" @key="item.ProductId">
+                                <div class="cart-drawer__thumb">
+                                    @if (!string.IsNullOrWhiteSpace(item.ImageUrl))
+                                    {
+                                        <img src="@item.ImageUrl" alt="" />
+                                    }
+                                    else
+                                    {
+                                        <span class="cart-drawer__thumb-placeholder" aria-hidden="true"></span>
+                                    }
+                                </div>
+                                <div class="cart-drawer__item-main">
+                                    <p class="cart-drawer__item-name">@item.Name</p>
+                                    <p class="cart-drawer__item-meta">@item.Quantity × @FormatVnd(item.Price)</p>
+                                </div>
+                                <button type="button" class="cart-drawer__remove" @onclick="() => RemoveAsync(item.ProductId)" aria-label="Xóa @item.Name">×</button>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+
+            <footer class="cart-drawer__footer">
+                <div class="cart-drawer__subtotal">
+                    <span>Tạm tính</span>
+                    <strong>@FormatVnd(CartState.Total)</strong>
+                </div>
+                <div class="cart-drawer__actions">
+                    <button type="button" class="cart-drawer__btn cart-drawer__btn--secondary" @onclick="GoViewCartAsync">Xem giỏ hàng</button>
+                    <button type="button" class="cart-drawer__btn cart-drawer__btn--primary" @onclick="GoCheckoutAsync" disabled="@(CartState.Items.Count == 0)">Thanh toán</button>
+                </div>
+            </footer>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private bool _isReady;
+
+    protected override void OnInitialized()
+    {
+        CartState.Changed += HandleCartChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _isReady = true;
+            try { await CartState.LoadAsync(); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[CartDrawer.razor] CartState.LoadAsync threw: {ex.GetType().Name}"); }
+            StateHasChanged();
+        }
+    }
+
+    private async Task CloseAsync() => await OnClose.InvokeAsync();
+
+    private async Task RemoveAsync(int productId) => await CartState.RemoveAsync(productId);
+
+    private async Task GoViewCartAsync()
+    {
+        await CloseAsync();
+        Navigation.NavigateTo("/cart");
+    }
+
+    private async Task GoCheckoutAsync()
+    {
+        if (CartState.Items.Count == 0)
+        {
+            return;
+        }
+
+        // Persist ALL cart items to sessionStorage — Checkout.razor reads this key.
+        var checkoutItems = CartState.Items
+            .Select(i => new CheckoutStorageItem(i.ProductId, i.Name, i.Price, i.ImageUrl, i.Quantity))
+            .ToList();
+        await JS.InvokeVoidAsync("sessionStorage.setItem", "checkoutItems", System.Text.Json.JsonSerializer.Serialize(checkoutItems));
+
+        await CloseAsync();
+        Navigation.NavigateTo("/cart/checkout");
+    }
+
+    private sealed record CheckoutStorageItem(int ProductId, string Name, decimal Price, string? ImageUrl, int Quantity);
+
+    private static string FormatVnd(decimal value) => string.Create(System.Globalization.CultureInfo.GetCultureInfo("vi-VN"), $"{value:N0}₫");
+
+    private void HandleCartChanged() { try { InvokeAsync(StateHasChanged); } catch (JSDisconnectedException) { } }
+
+    public void Dispose()
+    {
+        CartState.Changed -= HandleCartChanged;
+    }
+}

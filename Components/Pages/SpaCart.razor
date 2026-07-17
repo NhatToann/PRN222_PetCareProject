@@ -1,0 +1,718 @@
+@page "/spa-cart"
+@inject PetShop.Interfaces.ISpaBookingClient SpaClient
+@inject PetShop.Interfaces.IPetServiceClient PetServiceClient
+@inject PetShop.Interfaces.IPetsClient PetsClient
+@inject PetShop.Services.UserSessionService UserSession
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@implements IDisposable
+
+<PageTitle>Giỏ spa – Pet Toy Shop</PageTitle>
+
+<div class="home-page">
+    <TopBar />
+    <CustomerOnlyGuard>
+    <PageContextBar Title="Giỏ hàng" />
+
+    <main class="spa-cart-page">
+        <div class="container">
+            @if (isLoading)
+            {
+                <div class="spa-cart-page__loading">Đang tải giỏ spa...</div>
+            }
+            @if (!string.IsNullOrWhiteSpace(error))
+            {
+                <div class="spa-cart-page__error">@error</div>
+            }
+
+            @if (slotSuggestionModal.open)
+            {
+                <div style="position: fixed; inset: 0; background: rgba(15,23,42,0.5); display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 16px;">
+                    <div style="width: min(560px, 100%); background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 20px 50px rgba(15,23,42,0.2);">
+                        <h3 style="margin: 0; color: #0f172a;">Khung giờ đã đủ slot</h3>
+                        <p style="margin-top: 10px; margin-bottom: 10px; color: #334155;">@slotSuggestionModal.message</p>
+                        @if (!string.IsNullOrEmpty(slotSuggestionModal.suggestedStart))
+                        {
+                            <p style="margin-top: 0; margin-bottom: 16px; color: #0f172a; font-weight: 600;">
+                                Gợi ý: @FormatSuggestionDisplay(slotSuggestionModal.suggestedStart)
+                            </p>
+                        }
+                        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                            <button type="button" @onclick="CloseSuggestionModal"
+                                    style="padding: 10px 14px; border-radius: 8px; border: 1px solid #cbd5e1; background: #fff; cursor: pointer;">
+                                Tôi biết rồi
+                            </button>
+                            <button type="button" @onclick="ApplySuggested"
+                                    style="padding: 10px 14px; border-radius: 8px; border: 1px solid #0ea5e9; background: #0ea5e9; color: #fff; cursor: pointer;">
+                                Dùng khung giờ này
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @if (!isLoading && string.IsNullOrEmpty(error) && Services.Count == 0)
+            {
+                <div class="spa-cart-page__empty">
+                    <p>Giỏ spa đang trống. Hãy chọn thêm dịch vụ nhé.</p>
+                </div>
+            }
+
+            @if (!isLoading && string.IsNullOrEmpty(error) && Services.Count > 0)
+            {
+                <div class="spa-cart-checkout">
+                    <div class="spa-cart-checkout__table-wrap">
+                        <table class="spa-cart-checkout__table">
+                            <thead>
+                                <tr>
+                                    <th class="spa-cart-checkout__th-product">Sản phẩm</th>
+                                    <th class="spa-cart-checkout__th-price">Đơn giá</th>
+                                    <th class="spa-cart-checkout__th-qty">Số lượng</th>
+                                    <th class="spa-cart-checkout__th-total">Thành tiền</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var service in Services)
+                                {
+                                    var form = GetForm(service.ServiceId);
+                                    var servicePets = GetPetsForService(service.ServiceId);
+                                    var selectedPets = servicePets.Where(p => form.petIds.Contains(p.PetId)).ToList();
+                                    var total = ServiceTotals.TryGetValue(service.ServiceId, out var t) ? t : 0m;
+                                    var errorMsg = ValidationErrors.TryGetValue(service.ServiceId, out var msg) ? msg : null;
+
+                                    <tr class="spa-cart-checkout__row">
+                                        <td class="spa-cart-checkout__cell-product">
+                                            <div class="spa-cart-checkout__product">
+                                                <div class="spa-cart-checkout__product-thumb">
+                                                    <img src="@GetThumb(service.Name)" alt="@service.Name" />
+                                                </div>
+                                                <div class="spa-cart-checkout__product-info">
+                                                    <div class="spa-cart-checkout__product-name">@service.Name</div>
+                                                    <div class="spa-cart-checkout__product-meta">Thời gian: @service.Duration phút</div>
+                                                    <div class="spa-cart-checkout__product-form">
+                                                        <div class="spa-cart-checkout__form-row">
+                                                            <label>Ngày hẹn</label>
+                                                            <input type="date" value="@form.date"
+                                                                   min="@TodayIso"
+                                                                   @onchange="e => UpdateForm(service.ServiceId, date: e.Value?.ToString())" />
+                                                        </div>
+                                                        <div class="spa-cart-checkout__form-row">
+                                                            <label>Giờ hẹn</label>
+                                                            @{
+                                                                var slots = GetSlots(service.Duration);
+                                                                var morning = slots.morning;
+                                                                var afternoon = slots.afternoon;
+                                                                var allValues = morning.Concat(afternoon).Select(x => x.value).ToHashSet();
+                                                                var invalidTime = !string.IsNullOrEmpty(form.time) && !allValues.Contains(form.time);
+                                                                var timeValid = TimeValidations.TryGetValue(service.ServiceId, out var tv) ? tv : new TimeValidationState { isValid = true, message = null, isChecking = false };
+                                                                var slotBlocked = timeValid.isValid == false && !timeValid.isChecking;
+                                                                var noSlots = morning.Count == 0 && afternoon.Count == 0;
+                                                            }
+                                                            <select class="@(invalidTime || slotBlocked || noSlots ? "spa-time-input--invalid" : null)"
+                                                                    disabled="@noSlots"
+                                                                    value="@(invalidTime ? "" : form.time)"
+                                                                    @onchange="e => UpdateForm(service.ServiceId, time: e.Value?.ToString())">
+                                                                <option value="">@(noSlots ? "Không có khung giờ phù hợp" : "— Chọn giờ —")</option>
+                                                                @foreach (var opt in morning)
+                                                                {
+                                                                    <option value="@opt.value">@opt.label</option>
+                                                                }
+                                                                @foreach (var opt in afternoon)
+                                                                {
+                                                                    <option value="@opt.value">@opt.label</option>
+                                                                }
+                                                            </select>
+                                                            @if (invalidTime)
+                                                            {
+                                                                <span class="spa-time-input-error">Giờ đã chọn trước đó không còn hợp lệ — vui lòng chọn lại từ danh sách.</span>
+                                                            }
+                                                            @if (slotBlocked)
+                                                            {
+                                                                <span class="spa-time-input-error">@(timeValid.message ?? "Khung giờ không khả dụng.")</span>
+                                                            }
+                                                        </div>
+                                                        <div class="spa-cart-checkout__form-row">
+                                                            <label>Thú cưng</label>
+                                                            <div class="spa-cart-checkout__pets">
+                                                                @if (servicePets.Count == 0)
+                                                                {
+                                                                    <span class="spa-cart-checkout__pets-empty">Chưa có thú cưng.</span>
+                                                                }
+                                                                @foreach (var pet in servicePets)
+                                                                {
+                                                                    var checkedNow = form.petIds.Contains(pet.PetId);
+                                                                    var pct = GetPctForPet(service, pet);
+                                                                    <label class="spa-cart-checkout__pet-label">
+                                                                        <input type="checkbox" checked="@checkedNow"
+                                                                               @onchange="() => TogglePet(service.ServiceId, pet.PetId)" />
+                                                                        @pet.PetName@(pet.BreedName is not null ? $" ({pet.BreedName})" : "")
+                                                                        @if (pct is not null)
+                                                                        {
+                                                                            var pctVal = pct.Value;
+                                                                            var cls = pctVal > 100 ? "up" : pctVal < 100 ? "down" : "base";
+                                                                            <span class="spa-cart-checkout__pet-price-badge @cls">
+                                                                                @(pctVal > 100 ? $"+{(pctVal - 100):0}%" : pctVal < 100 ? $"-{(100 - pctVal):0}%" : "(giá gốc)")
+                                                                                - @PriceForPet(service, pet).ToString("N0", Vi)₫
+                                                                            </span>
+                                                                        }
+                                                                        else
+                                                                        {
+                                                                            <span class="spa-cart-checkout__pet-price-badge base">- @PriceForPet(service, pet).ToString("N0", Vi)₫</span>
+                                                                        }
+                                                                    </label>
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                        <div class="spa-cart-checkout__form-row">
+                                                            <label>Thanh toán</label>
+                                                            <select value="@form.paymentMethod"
+                                                                    @onchange="e => UpdateForm(service.ServiceId, paymentMethod: e.Value?.ToString())">
+                                                                <option value="cash">Thanh toán bằng tiền mặt</option>
+                                                                <option value="payos">Chuyển khoản qua PayOS</option>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                    @if (!string.IsNullOrEmpty(errorMsg))
+                                                    {
+                                                        <div class="spa-cart-checkout__row-error">@errorMsg</div>
+                                                    }
+                                                </div>
+                                            </div>
+                                            <button type="button" class="spa-cart-checkout__remove" @onclick="() => RemoveService(service.ServiceId)">Xóa</button>
+                                        </td>
+                                        <td class="spa-cart-checkout__cell-price">
+                                            @if (selectedPets.Count > 0)
+                                            {
+                                                <div class="spa-cart-checkout__cell-price-list">
+                                                    @foreach (var pet in selectedPets)
+                                                    {
+                                                        var pct = GetPctForPet(service, pet);
+                                                        <div class="spa-cart-checkout__cell-price-item">
+                                                            @pet.PetName@(pet.BreedName is not null ? $" ({pet.BreedName})" : "")
+                                                            <span class="spa-cart-checkout__cell-price-value">@PriceForPet(service, pet).ToString("N0", Vi)₫</span>
+                                                            @if (pct is not null && pct.Value != 100)
+                                                            {
+                                                                <span class="spa-cart-checkout__cell-price-pct @(pct.Value > 100 ? "up" : "down")">
+                                                                    @(pct.Value > 100 ? $"(+{(pct.Value - 100):0}%)" : $"(-{(100 - pct.Value):0}%)")
+                                                                </span>
+                                                            }
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <span>@(service.Price > 0 ? $"{service.Price.ToString("N0", Vi)}₫" : "—")</span>
+                                            }
+                                        </td>
+                                        <td class="spa-cart-checkout__cell-qty">@(selectedPets.Count > 0 ? selectedPets.Count : 1)</td>
+                                        <td class="spa-cart-checkout__cell-total">@total.ToString("N0", Vi)₫</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="spa-cart-checkout__message">
+                        <label class="spa-cart-checkout__message-label">Lời nhắn:</label>
+                        <input type="text" class="spa-cart-checkout__message-input"
+                               placeholder="Lưu ý cho cửa hàng..."
+                               @bind="sellerNote" @bind:event="oninput" />
+                    </div>
+
+                    <div class="spa-cart-checkout__payment">
+                        <div class="spa-cart-checkout__payment-row">
+                            <span class="spa-cart-checkout__payment-title">Phương thức thanh toán</span>
+                            <span class="spa-cart-checkout__payment-method">
+                                @(FirstFormPayment == "payos" ? "Chuyển khoản qua PayOS" : "Thanh toán bằng tiền mặt")
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="spa-cart-checkout__summary">
+                        <div class="spa-cart-checkout__summary-row spa-cart-checkout__summary-row--total">
+                            <span>Tổng thanh toán</span>
+                            <span class="spa-cart-checkout__total-value">@TotalPrice.ToString("N0", Vi)₫</span>
+                        </div>
+                    </div>
+
+                    <div class="spa-cart-checkout__footer">
+                        <p class="spa-cart-checkout__terms">Bằng việc nhấn Đặt hàng, bạn đồng ý với điều khoản sử dụng của chúng tôi.</p>
+                        <button type="button" class="spa-cart-checkout__submit" @onclick="SubmitAsync" disabled="@isSubmitting">
+                            @(isSubmitting ? "Đang xử lý..." : "Đặt hàng")
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    </main>
+
+    <Footer />
+    </CustomerOnlyGuard>
+</div>
+
+@code {
+    private static readonly System.Globalization.CultureInfo Vi = new("vi-VN");
+
+    [SupplyParameterFromQuery(Name = "serviceId")] private int? InitialServiceId { get; set; }
+
+    private bool isLoading = true;
+    private bool isSubmitting;
+    private string? error;
+
+    private List<PetShop.Models.PetServiceDto> Services = new();
+    private List<PetShop.Models.PetWithBreedPriceDto> Pets = new();
+    private readonly Dictionary<int, Dictionary<int, PetShop.Models.PetWithBreedPriceDto>> _petPricingByService = new();
+
+    private class FormState
+    {
+        public string date = "";
+        public string time = "";
+        public HashSet<int> petIds = new();
+        public string paymentMethod = "cash";
+        public string note = "";
+    }
+    private readonly Dictionary<int, FormState> _forms = new();
+
+    private class TimeValidationState { public bool isValid = true; public string? message; public bool isChecking; }
+    private readonly Dictionary<int, TimeValidationState> TimeValidations = new();
+    private readonly Dictionary<int, CancellationTokenSource> _availabilityCts = new();
+    private readonly Dictionary<int, int> _availabilityVersion = new();
+
+    private readonly Dictionary<int, string> ValidationErrors = new();
+
+    private string sellerNote = "";
+
+    private record SlotModalState(bool open, int? serviceId, string message, string? suggestedStart);
+    private SlotModalState slotSuggestionModal = new(false, null, "", null);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+        try { await LoadAsync(); }
+        catch (Exception ex) { error = $"Lỗi khởi tạo: {ex.Message}"; isLoading = false; StateHasChanged(); }
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        error = null;
+
+        try
+        {
+            try { await UserSession.LoadAsync(); }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[SpaCart.razor] LoadAsync UserSession.LoadAsync threw: {ex.GetType().Name} {ex.Message}"); }
+            // ProtectedLocalStorage can fail when localStorage was set without DPAPI (e.g., tests, manual seeds)
+
+            // Read cart from localStorage via JS interop
+            int[] cartIds = await JS.InvokeAsync<int[]>("spaCart.read");
+            if (InitialServiceId is int sid && sid > 0)
+            {
+                cartIds = (await JS.InvokeAsync<int[]>("spaCart.add", sid)).Distinct().ToArray();
+            }
+            cartIds = cartIds ?? Array.Empty<int>();
+            cartIds = cartIds.Where(id => id > 0).Distinct().ToArray();
+
+            if (cartIds.Length == 0)
+            {
+                Services = new();
+                Pets = new();
+                isLoading = false;
+                StateHasChanged();
+                return;
+            }
+
+            // Fetch each service detail (React parity: /api/pet-services/{id})
+            var serviceTasks = cartIds
+                .Select(id => PetServiceClient.GetDetailAsync(id))
+                .ToArray();
+            var serviceDetails = await Task.WhenAll(serviceTasks);
+            var servicesData = new List<PetShop.Models.PetServiceDto>();
+            foreach (var result in serviceDetails)
+            {
+                if (result.IsSuccess && result.Data is not null)
+                {
+                    servicesData.Add(result.Data.Service);
+                }
+            }
+            Services = servicesData;
+
+            // Fetch pets if customer known
+            var customerId = UserSession.CurrentUser?.UserId ?? 0;
+            if (customerId > 0)
+            {
+                var petsRes = await PetsClient.GetByCustomerAsync(customerId);
+                if (petsRes.IsSuccess && petsRes.Data is not null)
+                {
+                    Pets = petsRes.Data.ToList();
+                }
+                else
+                {
+                    Pets = new();
+                }
+            }
+            else
+            {
+                Pets = new();
+            }
+
+            // Initialize per-service form state
+            _forms.Clear();
+            foreach (var s in Services)
+            {
+                _forms[s.ServiceId] = new FormState();
+            }
+
+            // Per-service pet pricing (React parity: GET /api/pets/customer/{cid}/service/{sid}/pricing)
+            _petPricingByService.Clear();
+            if (customerId > 0 && Services.Count > 0)
+            {
+                var pricingTasks = Services
+                    .Select(svc => (svc.ServiceId, Task: PetsClient.GetWithPricingAsync(customerId, svc.ServiceId)))
+                    .ToList();
+                var pricingResults = await Task.WhenAll(pricingTasks.Select(t => t.Task));
+                for (int i = 0; i < pricingTasks.Count; i++)
+                {
+                    var (pricingSid, result) = (pricingTasks[i].ServiceId, pricingResults[i]);
+                    if (result.IsSuccess && result.Data is not null)
+                    {
+                        var d = new Dictionary<int, PetShop.Models.PetWithBreedPriceDto>();
+                        foreach (var p in result.Data) d[p.PetId] = p;
+                        _petPricingByService[pricingSid] = d;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private FormState GetForm(int serviceId) =>
+        _forms.TryGetValue(serviceId, out var f) ? f : _forms[serviceId] = new FormState();
+
+    private void UpdateForm(int serviceId, string? date = null, string? time = null, string? paymentMethod = null)
+    {
+        var f = GetForm(serviceId);
+        if (date is not null) f.date = date;
+        if (time is not null) f.time = time;
+        if (paymentMethod is not null) f.paymentMethod = paymentMethod;
+
+        if (date is not null || time is not null)
+        {
+            // Cancel any pending availability check for this service
+            if (_availabilityCts.TryGetValue(serviceId, out var cts))
+            {
+                try { cts.Cancel(); cts.Dispose(); } catch { }
+                _availabilityCts.Remove(serviceId);
+            }
+            TimeValidations[serviceId] = new TimeValidationState();
+            _availabilityVersion[serviceId] = _availabilityVersion.TryGetValue(serviceId, out var v) ? v + 1 : 1;
+            _ = CheckAvailabilityAsync(serviceId);
+        }
+        StateHasChanged();
+    }
+
+    private async Task CheckAvailabilityAsync(int serviceId, CancellationToken cancellationToken = default)
+    {
+        var f = GetForm(serviceId);
+        if (string.IsNullOrEmpty(f.date) || string.IsNullOrEmpty(f.time)) return;
+        var service = Services.FirstOrDefault(s => s.ServiceId == serviceId);
+        if (service is null) return;
+
+        DateTime start;
+        try { start = DateTime.Parse($"{f.date}T{f.time}"); }
+        catch { return; }
+
+        var expectedVersion = _availabilityVersion.TryGetValue(serviceId, out var v) ? v : 0;
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(TimeSpan.FromSeconds(10));
+        _availabilityCts[serviceId] = cts;
+
+        var selectedPets = GetPetsForService(serviceId).Where(p => f.petIds.Contains(p.PetId)).ToList();
+        var qty = Math.Min(2, Math.Max(1, selectedPets.Count > 0 ? selectedPets.Count : 1));
+        var result = await SpaClient.CheckAvailabilityAsync(start, service.Duration, qty, cts.Token);
+        if (cts.Token.IsCancellationRequested) return;
+
+        // Discard stale result if a newer request was started
+        if (_availabilityVersion.TryGetValue(serviceId, out var currentVersion) && currentVersion != expectedVersion) return;
+
+        if (!result.IsSuccess || result.Data is null) return;
+        var data = result.Data;
+        TimeValidations[serviceId] = new TimeValidationState
+        {
+            isValid = data.IsAvailable,
+            message = data.Message,
+            isChecking = false
+        };
+        StateHasChanged();
+    }
+
+    private void TogglePet(int serviceId, int petId)
+    {
+        var f = GetForm(serviceId);
+        if (f.petIds.Contains(petId)) f.petIds.Remove(petId);
+        else f.petIds.Add(petId);
+        if (_availabilityCts.TryGetValue(serviceId, out var cts))
+        {
+            try { cts.Cancel(); cts.Dispose(); } catch { }
+            _availabilityCts.Remove(serviceId);
+        }
+        _availabilityVersion[serviceId] = _availabilityVersion.TryGetValue(serviceId, out var v) ? v + 1 : 1;
+        _ = CheckAvailabilityAsync(serviceId);
+        StateHasChanged();
+    }
+
+    private async Task RemoveService(int serviceId)
+    {
+        await JS.InvokeVoidAsync("spaCart.remove", serviceId);
+        Services.RemoveAll(s => s.ServiceId == serviceId);
+        _forms.Remove(serviceId);
+        TimeValidations.Remove(serviceId);
+        ValidationErrors.Remove(serviceId);
+        StateHasChanged();
+    }
+
+    private Dictionary<int, decimal> ServiceTotals
+    {
+        get
+        {
+            var d = new Dictionary<int, decimal>();
+            foreach (var s in Services)
+            {
+                var f = GetForm(s.ServiceId);
+                var selected = GetPetsForService(s.ServiceId).Where(p => f.petIds.Contains(p.PetId)).ToList();
+                decimal total = 0;
+                foreach (var p in selected) total += PriceForPet(s, p);
+                d[s.ServiceId] = total;
+            }
+            return d;
+        }
+    }
+
+    private decimal TotalPrice => ServiceTotals.Values.Sum();
+
+    private string FirstFormPayment => Services.Count > 0 ? GetForm(Services[0].ServiceId).paymentMethod : "cash";
+
+    private IReadOnlyList<PetShop.Models.PetWithBreedPriceDto> GetPetsForService(int serviceId)
+    {
+        if (!_petPricingByService.TryGetValue(serviceId, out var pricing) || pricing.Count == 0)
+        {
+            return Pets;
+        }
+
+        if (Pets.Count == 0)
+        {
+            return pricing.Values.OrderBy(p => p.PetName).ToList();
+        }
+
+        return Pets
+            .Select(p => pricing.TryGetValue(p.PetId, out var priced) ? MergePetPricing(p, priced) : p)
+            .ToList();
+    }
+
+    private static PetShop.Models.PetWithBreedPriceDto MergePetPricing(
+        PetShop.Models.PetWithBreedPriceDto pet,
+        PetShop.Models.PetWithBreedPriceDto priced) =>
+        pet with
+        {
+            BreedId = priced.BreedId ?? pet.BreedId,
+            BreedName = !string.IsNullOrWhiteSpace(priced.BreedName) ? priced.BreedName : pet.BreedName,
+            PriceAdjustPercent = priced.PriceAdjustPercent,
+            FinalPrice = priced.FinalPrice
+        };
+
+    private decimal PriceForPet(PetShop.Models.PetServiceDto service, PetShop.Models.PetWithBreedPriceDto pet)
+    {
+        if (_petPricingByService.TryGetValue(service.ServiceId, out var pricing) && pricing.TryGetValue(pet.PetId, out var p))
+        {
+            if (p.FinalPrice is not null) return Math.Max(0, p.FinalPrice.Value);
+            if (p.PriceAdjustPercent is not null) return Math.Max(0, service.Price * p.PriceAdjustPercent.Value / 100m);
+        }
+        if (pet.FinalPrice is not null) return Math.Max(0, pet.FinalPrice.Value);
+        if (pet.PriceAdjustPercent is not null) return Math.Max(0, service.Price * pet.PriceAdjustPercent.Value / 100m);
+        return service.Price;
+    }
+
+    private decimal? GetPctForPet(PetShop.Models.PetServiceDto service, PetShop.Models.PetWithBreedPriceDto pet)
+    {
+        if (_petPricingByService.TryGetValue(service.ServiceId, out var pricing) && pricing.TryGetValue(pet.PetId, out var p))
+            return p.PriceAdjustPercent;
+        return pet.PriceAdjustPercent;
+    }
+
+    private string TodayIso => DateTime.Today.ToString("yyyy-MM-dd");
+
+    private (List<(string value, string label)> morning, List<(string value, string label)> afternoon) GetSlots(int durationMin)
+    {
+        var d = Math.Max(1, durationMin);
+        var morning = new List<(string, string)>();
+        var afternoon = new List<(string, string)>();
+        for (int t = 7 * 60; t < 12 * 60; t += 30)
+        {
+            if (t + d <= 12 * 60)
+            {
+                var h = t / 60; var m = t % 60;
+                var label = $"{h:00}:{m:00}";
+                morning.Add((label, label));
+            }
+        }
+        for (int t = 13 * 60; t < 18 * 60; t += 30)
+        {
+            if (t + d <= 18 * 60)
+            {
+                var h = t / 60; var m = t % 60;
+                var label = $"{h:00}:{m:00}";
+                afternoon.Add((label, label));
+            }
+        }
+        return (morning, afternoon);
+    }
+
+    private static readonly Dictionary<string, string> ThumbMap = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["spa cao cấp"] = "/images/spa-caocap1.jpg",
+        ["tắm + vệ sinh cơ bản"] = "/images/bath1.png",
+        ["cắt tỉa lông chuyên nghiệp"] = "/images/cut1.jpg",
+        ["vệ sinh răng miệng"] = "/images/teeth1.jpg",
+    };
+
+    private static string GetThumb(string? name)
+    {
+        if (string.IsNullOrEmpty(name)) return "/images/placeholder.jpg";
+        if (ThumbMap.TryGetValue(name, out var url)) return url;
+        var lower = name.ToLowerInvariant();
+        if (lower.Contains("tắm") || lower.Contains("bath") || lower.Contains("vệ sinh cơ bản")) return "/images/bath1.png";
+        if (lower.Contains("cắt") || lower.Contains("tỉa")) return "/images/cut1.jpg";
+        if (lower.Contains("spa") || lower.Contains("cao cấp")) return "/images/spa-caocap1.jpg";
+        if (lower.Contains("răng") || lower.Contains("miệng")) return "/images/teeth1.jpg";
+        return "/images/placeholder.jpg";
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (isSubmitting) return;
+        isSubmitting = true;
+        error = null;
+        var payosIds = new List<int>();
+        bool payosSelected = false;
+        var customerId = UserSession.CurrentUser?.UserId ?? 0;
+
+        foreach (var service in Services)
+        {
+            var f = GetForm(service.ServiceId);
+            if (string.IsNullOrEmpty(f.date) || string.IsNullOrEmpty(f.time))
+            {
+                ValidationErrors[service.ServiceId] = "Vui lòng chọn ngày và giờ.";
+                isSubmitting = false;
+                StateHasChanged();
+                return;
+            }
+            if (f.petIds.Count == 0)
+            {
+                ValidationErrors[service.ServiceId] = "Vui lòng chọn thú cưng.";
+                isSubmitting = false;
+                StateHasChanged();
+                return;
+            }
+            ValidationErrors.Remove(service.ServiceId);
+
+            if (f.paymentMethod == "payos") payosSelected = true;
+            var selected = GetPetsForService(service.ServiceId).Where(p => f.petIds.Contains(p.PetId)).ToList();
+            DateTime start;
+            try { start = DateTime.Parse($"{f.date}T{f.time}"); }
+            catch { continue; }
+            var req = new PetShop.Models.CreateSpaBookingRequest(
+                selected.Select(p => p.PetId).ToList(),
+                start,
+                string.IsNullOrWhiteSpace(sellerNote) ? f.note : sellerNote,
+                new List<PetShop.Models.SpaCartItemRequest> { new(service.ServiceId, 1) },
+                f.paymentMethod);
+            var createRes = await SpaClient.CreateAsync(customerId, req);
+            if (!createRes.IsSuccess || createRes.Data is null)
+            {
+                isSubmitting = false;
+                slotSuggestionModal = new SlotModalState(true, service.ServiceId, createRes.Error ?? "Khung giờ đã đủ 2 slot.", null);
+                StateHasChanged();
+                return;
+            }
+            var booking = createRes.Data;
+            var ids = booking.BookingIds?.Any() == true ? booking.BookingIds : new List<int> { booking.BookingId };
+            payosIds.AddRange(ids);
+        }
+
+        if (payosSelected && payosIds.Count > 0)
+        {
+            var firstId = payosIds[0];
+            var returnUrl = Navigation.ToAbsoluteUri($"/spa-invoice?payos=success&bookingId={firstId}&bookingIds={string.Join(',', payosIds)}").ToString();
+            var cancelUrl = Navigation.ToAbsoluteUri($"/spa-invoice?payos=cancel&bookingId={firstId}&bookingIds={string.Join(',', payosIds)}").ToString();
+            var payRes = await SpaClient.CreateSpaPayOSPaymentAsync(firstId, payosIds, returnUrl, cancelUrl);
+            isSubmitting = false;
+            if (payRes.IsSuccess && payRes.Data is not null && !string.IsNullOrWhiteSpace(payRes.Data.CheckoutUrl))
+            {
+                await JS.InvokeVoidAsync("spaCart.clear");
+                Navigation.NavigateTo(payRes.Data.CheckoutUrl, forceLoad: true);
+                return;
+            }
+            error = payRes.Error ?? "Không nhận được link PayOS.";
+            StateHasChanged();
+            return;
+        }
+
+        await JS.InvokeVoidAsync("spaCart.clear");
+        isSubmitting = false;
+        Navigation.NavigateTo("/spa-booking-history", forceLoad: true);
+    }
+
+    private void CloseSuggestionModal() => slotSuggestionModal = new(false, null, "", null);
+
+    private async Task ApplySuggested()
+    {
+        var s = slotSuggestionModal.suggestedStart;
+        if (slotSuggestionModal.serviceId is int sid && !string.IsNullOrEmpty(s))
+        {
+            DateTime dt;
+            if (DateTime.TryParse(s, out dt))
+            {
+                var f = GetForm(sid);
+                f.date = dt.ToString("yyyy-MM-dd");
+                f.time = dt.ToString("HH:mm");
+                ValidationErrors.Remove(sid);
+                error = null;
+                if (_availabilityCts.TryGetValue(sid, out var cts))
+                {
+                    try { cts.Cancel(); cts.Dispose(); } catch { }
+                    _availabilityCts.Remove(sid);
+                }
+                _availabilityVersion[sid] = _availabilityVersion.TryGetValue(sid, out var v) ? v + 1 : 1;
+                await CheckAvailabilityAsync(sid);
+            }
+        }
+        slotSuggestionModal = new(false, null, "", null);
+    }
+
+    private static string FormatSuggestionDisplay(string iso)
+    {
+        if (DateTime.TryParse(iso, out var dt))
+            return dt.ToString("dd/MM/yyyy HH:mm", Vi);
+        return iso;
+    }
+
+    public void Dispose()
+    {
+        foreach (var cts in _availabilityCts.Values)
+        {
+            try { cts.Cancel(); cts.Dispose(); } catch { }
+        }
+        _availabilityCts.Clear();
+    }
+}

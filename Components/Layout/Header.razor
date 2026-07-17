@@ -1,0 +1,63 @@
+@implements IDisposable
+@inject PetShop.Services.UserSessionService UserSession
+@inject PetShop.Services.CartStateService CartState
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<header class="top-strip">
+    <span>Pet care, food, toys and spa services</span>
+    <span>Hotline: 0900 123 456</span>
+</header>
+
+<header class="site-header">
+    <a class="brand" href="/" aria-label="PetShop home">
+        <span class="brand-mark">P</span>
+        <span>PetShop</span>
+    </a>
+    <SearchBar />
+    <div class="header-actions">
+        @if (UserSession.IsAuthenticated)
+        {
+            <span>@UserSession.CurrentUser?.Name</span>
+            <button class="link-button" type="button" @onclick="LogoutAsync">Logout</button>
+        }
+        else
+        {
+            <a href="/login">Login</a>
+        }
+        <a class="cart-link" href="/cart">Cart (@CartState.Count)</a>
+    </div>
+</header>
+
+@code {
+    protected override void OnInitialized()
+    {
+        UserSession.Changed += StateHasChanged;
+        CartState.Changed += StateHasChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        try { await UserSession.LoadAsync(); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Layout/Header.razor] UserSession.LoadAsync threw: {ex.GetType().Name}"); }
+        try { await CartState.LoadAsync(); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Layout/Header.razor] CartState.LoadAsync threw: {ex.GetType().Name}"); }
+        StateHasChanged();
+    }
+
+    private async Task LogoutAsync()
+    {
+        await UserSession.SignOutAsync();
+        await JS.InvokeVoidAsync("spaCart.clear");
+        Navigation.NavigateTo("/");
+    }
+
+    public void Dispose()
+    {
+        UserSession.Changed -= StateHasChanged;
+        CartState.Changed -= StateHasChanged;
+    }
+}

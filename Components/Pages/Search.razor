@@ -1,0 +1,313 @@
+@page "/search"
+@inject PetShop.Interfaces.IProductCatalogClient ProductCatalog
+@inject PetShop.Services.CartStateService CartState
+@inject PetShop.Services.UserSessionService UserSession
+@inject NavigationManager Navigation
+@implements IDisposable
+
+<PageTitle>Tìm kiếm sản phẩm – Pet Toy Shop</PageTitle>
+
+<div class="search-products-page">
+    <TopBar />
+    <Header OnOpenCart="OpenCart" />
+
+    <main class="search-products-main container">
+        <div class="search-products-head">
+            <h1 class="search-products-title">
+                @if (!string.IsNullOrWhiteSpace(Keyword))
+                {
+                    <text>Kết quả tìm kiếm cho từ khóa <span class="search-keyword">“@Keyword”</span></text>
+                }
+                else
+                {
+                    <text>Kết quả tìm kiếm</text>
+                }
+            </h1>
+            <p class="search-products-sub">
+                @if (!string.IsNullOrWhiteSpace(Keyword))
+                {
+                    <button type="button" class="clear-keyword-btn" @onclick="ClearKeyword">Xóa từ khóa</button>
+                }
+                else
+                {
+                    <text>Bạn chưa nhập từ khóa — đang hiển thị toàn bộ sản phẩm.</text>
+                }
+                @if (selectedCategoryId is not null && categories.Count > 0)
+                {
+                    <span class="search-filter-note">
+                        Danh mục:
+                        <strong>@(categories.FirstOrDefault(c => c.CategoryId == selectedCategoryId)?.CategoryName ?? "Đang lọc")</strong>
+                    </span>
+                }
+            </p>
+        </div>
+
+        <section class="search-products-layout">
+            <aside class="search-filter-panel">
+                <div class="filter-header">
+                    <h3>Danh mục sản phẩm</h3>
+                </div>
+                <div class="filter-chips">
+                    <button type="button" class="filter-chip @(selectedCategoryId is null ? "active" : null)" @onclick="() => SetCategory(null)">
+                        Tất cả
+                    </button>
+                    @foreach (var category in categories)
+                    {
+                        var catId = category.CategoryId;
+                        <button type="button" class="filter-chip @(selectedCategoryId == catId ? "active" : null)" @onclick="() => SetCategory(catId)">
+                            <span>@category.CategoryName</span>
+                            <small>@category.ProductCount</small>
+                        </button>
+                    }
+                </div>
+            </aside>
+
+            <div class="search-products-content">
+                @if (isLoading)
+                {
+                    <div class="search-state">Đang tải dữ liệu sản phẩm...</div>
+                }
+                else if (!string.IsNullOrWhiteSpace(error))
+                {
+                    <div class="search-state error">@error</div>
+                }
+                else if (products.Count == 0)
+                {
+                    <div class="search-state">Không tìm thấy sản phẩm khớp bộ lọc hiện tại.</div>
+                }
+                else
+                {
+                    <div class="search-sort-toolbar" role="toolbar" aria-label="Sắp xếp kết quả">
+                        <div class="search-sort-tabs">
+                            @foreach (var tab in SortTabs)
+                            {
+                                <button type="button" class="search-sort-tab @(sortBy == tab.Id ? "active" : null)" @onclick="() => SetSort(tab.Id)">@tab.Label</button>
+                            }
+                            <label class="search-sort-price">
+                                <span class="search-sort-price-label">Giá</span>
+                                <select class="search-sort-select" value="@PriceSortValue" @onchange="HandlePriceSortChange" aria-label="Sắp xếp theo giá">
+                                    <option value="">Chọn</option>
+                                    <option value="price_asc">Từ thấp đến cao</option>
+                                    <option value="price_desc">Từ cao đến thấp</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div class="search-sort-meta">
+                            <span class="search-result-count">@sortedProducts.Count sản phẩm</span>
+                            @if (totalPages > 1)
+                            {
+                                <div class="search-toolbar-pager" role="navigation" aria-label="Phân trang (thanh công cụ)">
+                                    <button type="button" class="search-toolbar-pager-btn" disabled="@(currentPage <= 1)" @onclick="PrevPage" aria-label="Trang trước">‹</button>
+                                    <span class="search-toolbar-pager-label">@currentPage/@totalPages</span>
+                                    <button type="button" class="search-toolbar-pager-btn" disabled="@(currentPage >= totalPages)" @onclick="NextPage" aria-label="Trang sau">›</button>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="products-grid search-products-grid">
+                        @foreach (var product in paginatedProducts)
+                        {
+                            <ProductCard Product="product" Variant="search" ShowActions="false" />
+                        }
+                    </div>
+
+                    @if (totalPages > 1)
+                    {
+                        <nav class="search-pagination" aria-label="Phân trang kết quả">
+                            <button type="button" class="search-pagination-arrow" disabled="@(currentPage <= 1)" @onclick="PrevPage" aria-label="Trang trước">‹</button>
+                            <div class="search-pagination-pages">
+                                @foreach (var item in paginationItems)
+                                {
+                                    if (item == -1)
+                                    {
+                                        <span class="search-pagination-ellipsis" aria-hidden="true">…</span>
+                                    }
+                                    else
+                                    {
+                                        var pageNum = item;
+                                        <button type="button"
+                                                class="search-pagination-num @(currentPage == pageNum ? "active" : null)"
+                                                @onclick="() => GoToPage(pageNum)"
+                                                aria-current="@(currentPage == pageNum ? "page" : null)">@pageNum</button>
+                                    }
+                                }
+                            </div>
+                            <button type="button" class="search-pagination-arrow" disabled="@(currentPage >= totalPages)" @onclick="NextPage" aria-label="Trang sau">›</button>
+                        </nav>
+                    }
+                }
+            </div>
+        </section>
+    </main>
+
+    <Footer />
+    <CartDrawer Open="cartDrawerOpen" OnClose="CloseCart" />
+</div>
+
+@code {
+    private const int PageSize = 20;
+
+    [SupplyParameterFromQuery(Name = "q")] private string? Keyword { get; set; }
+
+    private IReadOnlyList<PetShop.Models.ProductDto_temp> products = Array.Empty<PetShop.Models.ProductDto_temp>();
+    private IReadOnlyList<PetShop.Models.ProductCategoryFilterDto_temp> categories = Array.Empty<PetShop.Models.ProductCategoryFilterDto_temp>();
+    private int? selectedCategoryId;
+    private string sortBy = "relevant";
+    private int currentPage = 1;
+    private bool isLoading = true;
+    private string? error;
+    private bool cartDrawerOpen;
+
+    private static readonly (string Id, string Label)[] SortTabs =
+    {
+        ("relevant", "Liên quan"),
+        ("newest", "Mới nhất"),
+        ("bestseller", "Bán chạy")
+    };
+
+    private string PriceSortValue => sortBy is "price_asc" or "price_desc" ? sortBy : string.Empty;
+
+    private IReadOnlyList<PetShop.Models.ProductDto_temp> sortedProducts => SortProducts(products, sortBy);
+
+    private int totalPages => Math.Max(1, (int)Math.Ceiling(sortedProducts.Count / (double)PageSize));
+
+    private IEnumerable<PetShop.Models.ProductDto_temp> paginatedProducts
+    {
+        get
+        {
+            var start = (currentPage - 1) * PageSize;
+            return sortedProducts.Skip(start).Take(PageSize);
+        }
+    }
+
+    private IReadOnlyList<int> paginationItems => BuildPaginationItems(totalPages, currentPage);
+
+    protected override void OnInitialized()
+    {
+        CartState.Changed += HandleCartChanged;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Keyword = Keyword?.Trim();
+        currentPage = 1;
+        selectedCategoryId = null;
+        sortBy = "relevant";
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+        error = null;
+
+        var productTask = ProductCatalog.GetProductsAsync(Keyword, selectedCategoryId);
+        // React sample keeps the category sidebar visible even when a keyword has no matches.
+        var categoryTask = ProductCatalog.GetCategoriesAsync();
+
+        var productResult = await productTask;
+        products = productResult.Data ?? Array.Empty<PetShop.Models.ProductDto_temp>();
+        error = productResult.Error;
+
+        var categoryResult = await categoryTask;
+        categories = categoryResult.Data ?? Array.Empty<PetShop.Models.ProductCategoryFilterDto_temp>();
+
+        isLoading = false;
+    }
+
+    private async Task SetCategory(int? categoryId)
+    {
+        selectedCategoryId = categoryId;
+        currentPage = 1;
+        await LoadDataAsync();
+    }
+
+    private void SetSort(string value)
+    {
+        sortBy = value;
+        currentPage = 1;
+    }
+
+    private void HandlePriceSortChange(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+        sortBy = string.IsNullOrWhiteSpace(value) ? "relevant" : value;
+        currentPage = 1;
+    }
+
+    private void ClearKeyword() => Navigation.NavigateTo("/search");
+
+    private void PrevPage()
+    {
+        if (currentPage > 1)
+        {
+            currentPage--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (currentPage < totalPages)
+        {
+            currentPage++;
+        }
+    }
+
+    private void GoToPage(int page) => currentPage = page;
+
+    private Task OpenCart()
+    {
+        cartDrawerOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private Task CloseCart()
+    {
+        cartDrawerOpen = false;
+        return Task.CompletedTask;
+    }
+
+    private void HandleCartChanged() => InvokeAsync(StateHasChanged);
+
+    private static IReadOnlyList<PetShop.Models.ProductDto_temp> SortProducts(IReadOnlyList<PetShop.Models.ProductDto_temp> source, string sort)
+    {
+        var list = source.ToList();
+        return sort switch
+        {
+            "newest" => list.OrderByDescending(p => p.ProductId).ToList(),
+            "bestseller" => list.OrderByDescending(p => p.StockQuantity).ToList(),
+            "price_asc" => list.OrderBy(p => p.Price).ToList(),
+            "price_desc" => list.OrderByDescending(p => p.Price).ToList(),
+            _ => list
+        };
+    }
+
+    private static IReadOnlyList<int> BuildPaginationItems(int total, int current)
+    {
+        if (total <= 9)
+        {
+            return Enumerable.Range(1, total).ToArray();
+        }
+
+        var set = new HashSet<int> { 1, total, current, current - 1, current + 1 };
+        var nums = set.Where(n => n >= 1 && n <= total).OrderBy(n => n).ToList();
+        var output = new List<int>();
+        for (var i = 0; i < nums.Count; i++)
+        {
+            if (i > 0 && nums[i] - nums[i - 1] > 1)
+            {
+                output.Add(-1);
+            }
+
+            output.Add(nums[i]);
+        }
+
+        return output;
+    }
+
+    public void Dispose()
+    {
+        CartState.Changed -= HandleCartChanged;
+    }
+}

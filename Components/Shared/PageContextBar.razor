@@ -1,0 +1,20 @@
+@inject PetShop.Services.UserSessionService UserSession
+
+<header class="page-context-bar" role="banner">
+    <div class="page-context-bar__inner">
+        <a href="@LogoTarget" class="brand-logo brand-logo--compact page-context-bar__logo" aria-label="Pet Toy Shop">
+            <div class="brand-logo__img">
+                <img src="https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?w=160&q=80" alt="" width="56" height="56" decoding="async" />
+            </div>
+            <span class="brand-logo__text">Pet Toy Shop</span>
+        </a>
+        <span class="page-context-bar__sep" aria-hidden="true">|</span>
+        <h1 class="page-context-bar__title">@Title</h1>
+    </div>
+</header>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+
+    private string LogoTarget => (UserSession.CurrentUser?.Role ?? string.Empty).Equals("staff", StringComparison.OrdinalIgnoreCase) ? "/system" : "/";
+}

@@ -1,0 +1,49 @@
+<section class="featured-categories">
+    <div class="container container--home-wide">
+        <div class="home-section-head">
+            <h2 class="section-title">
+                <span class="section-title__label">Danh mục nổi bật</span>
+                <span class="section-title__paws" aria-hidden="true">
+                    <i class="fas fa-paw section-title__paw section-title__paw--a"></i>
+                    <i class="fas fa-paw section-title__paw section-title__paw--b"></i>
+                </span>
+            </h2>
+            <a href="/search" class="section-view-all">
+                Xem tất cả
+                <span class="section-view-all__arrow" aria-hidden="true"><i class="fas fa-arrow-right"></i></span>
+            </a>
+        </div>
+
+        <ul class="categories-circular">
+            @foreach (var category in Categories)
+            {
+                <li class="categories-circular__item">
+                    <button type="button" class="category-circle-item" @onclick="() => GoToCategory(category.Name)">
+                        <span class="category-circle" style="--category-accent: @category.Color">
+                            <img src="@category.Image" alt="" class="category-circle__img" loading="lazy" />
+                        </span>
+                        <span class="category-circle__label">@category.Name</span>
+                    </button>
+                </li>
+            }
+        </ul>
+    </div>
+</section>
+
+@code {
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
+
+    private static readonly CategoryItem[] Categories =
+    {
+        new("Đồ chơi cho chó", "#4a2477", "https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=200"),
+        new("Đồ chơi cho mèo", "#FFD6C0", "https://images.unsplash.com/photo-1574158622682-e40e69881006?w=200"),
+        new("Đồ chơi thông minh", "#FFC94D", "https://images.unsplash.com/photo-1516734212186-a967f81ad0d7?w=200"),
+        new("Đồ chơi nhai", "#FF8C94", "https://images.unsplash.com/photo-1561948955-570b270e7c36?w=200"),
+        new("Đồ chơi vận động", "#4a2477", "https://images.unsplash.com/photo-1576201836106-db1758fd1c97?w=200"),
+        new("Đồ chơi tương tác", "#FFD6C0", "https://images.unsplash.com/photo-1583511655826-05700d52f4d9?w=200")
+    };
+
+    private void GoToCategory(string name) => Navigation.NavigateTo($"/category/{Uri.EscapeDataString(name)}");
+
+    private sealed record CategoryItem(string Name, string Color, string Image);
+}

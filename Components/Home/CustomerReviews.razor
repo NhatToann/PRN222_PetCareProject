@@ -1,0 +1,42 @@
+<section class="customer-reviews">
+    <div class="container container--home-wide">
+        <div class="home-section-head">
+            <h2 class="section-title">
+                <span class="section-title__label">Khách hàng nói gì về chúng tôi</span>
+            </h2>
+            <span class="section-view-all section-view-all--static" aria-label="Xem tất cả đánh giá - sắp ra mắt" title="Tính năng đang được hoàn thiện">
+                Xem tất cả
+                <span class="section-view-all__arrow" aria-hidden="true"><i class="fas fa-arrow-right"></i></span>
+            </span>
+        </div>
+
+        <div class="reviews-grid">
+            @foreach (var review in Reviews)
+            {
+                <div class="review-card">
+                    <div class="review-header">
+                        <div class="review-avatar">@((MarkupString)review.AvatarIcon)</div>
+                        <div class="review-info">
+                            <h4 class="reviewer-name">@review.Name</h4>
+                            <p class="reviewer-pet"><i class="fas fa-paw paw-icon" aria-hidden="true"></i> @review.Pet</p>
+                        </div>
+                        <div class="review-date">@review.Date</div>
+                    </div>
+                    <p class="review-comment">@review.Comment</p>
+                </div>
+            }
+        </div>
+    </div>
+</section>
+
+@code {
+    private static readonly ReviewItem[] Reviews =
+    {
+        new("<i class=\"fas fa-dog\" aria-hidden=\"true\"></i>", "Minh Anh", "Bé cún nhà mình rất thích món đồ chơi này, chơi suốt ngày không chán!", "Bé Cún (Poodle)", "2 ngày trước"),
+        new("<i class=\"fas fa-cat\" aria-hidden=\"true\"></i>", "Phương Thảo", "Mèo nhà mê cần câu này lắm! Lông mềm, chuông kêu vui tai.", "Bé Mướp (Mèo Anh)", "5 ngày trước"),
+        new("<i class=\"fas fa-dog\" aria-hidden=\"true\"></i>", "Hoàng Long", "Sản phẩm bền, đẹp, bé nhà mình chơi 3 tháng rồi vẫn còn tốt.", "Bé Bông (Golden)", "1 tuần trước"),
+        new("<i class=\"fas fa-paw\" aria-hidden=\"true\"></i>", "Thu Hà", "Shop tư vấn nhiệt tình, đóng gói cẩn thận.", "Bông (Thỏ)", "1 tuần trước")
+    };
+
+    private sealed record ReviewItem(string AvatarIcon, string Name, string Comment, string Pet, string Date);
+}

@@ -1,0 +1,101 @@
+﻿@page "/"
+@inject PetShop.Interfaces.IProductCatalogClient ProductCatalog
+@inject PetShop.Services.CartStateService CartState
+@inject PetShop.Services.UserSessionService UserSession
+@implements IDisposable
+
+<PageTitle>Pet Toy Shop</PageTitle>
+
+<div class="home-page">
+    <TopBar />
+    <Header OnOpenCart="OpenCart" />
+    <Navigation />
+
+    <main>
+        <HeroBanner />
+        @if (!IsDoctor)
+        {
+            <FeaturedCategories />
+            <ProductList Products="products"
+                         Loading="isLoadingProducts"
+                         Error="@productError"
+                         OnAddToCart="ShowAddedToastAsync"
+                         OnRetry="LoadProductsAsync" />
+        }
+        <CustomerReviews />
+    </main>
+
+    <Footer />
+    <Toast Show="toastVisible" Message="@toastMessage" />
+    <CartDrawer Open="cartDrawerOpen" OnClose="CloseCart" />
+</div>
+
+@code {
+    private IReadOnlyList<PetShop.Models.ProductDto_temp> products = Array.Empty<PetShop.Models.ProductDto_temp>();
+    private bool isLoadingProducts = true;
+    private string? productError;
+    private bool cartDrawerOpen;
+    private bool toastVisible;
+    private string toastMessage = string.Empty;
+
+    private bool IsDoctor => (UserSession.CurrentUser?.Role ?? string.Empty).Equals("doctor", StringComparison.OrdinalIgnoreCase);
+
+    protected override void OnInitialized()
+    {
+        CartState.Changed += HandleCartChanged;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProductsAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try { await UserSession.LoadAsync(); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Home.razor] UserSession.LoadAsync threw: {ex.GetType().Name}"); }
+            try { await CartState.LoadAsync(); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Home.razor] CartState.LoadAsync threw: {ex.GetType().Name}"); }
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadProductsAsync()
+    {
+        isLoadingProducts = true;
+        productError = null;
+        var result = await ProductCatalog.GetProductsAsync();
+        products = result.Data ?? Array.Empty<PetShop.Models.ProductDto_temp>();
+        productError = result.Error;
+        isLoadingProducts = false;
+    }
+
+    private Task OpenCart()
+    {
+        cartDrawerOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private Task CloseCart()
+    {
+        cartDrawerOpen = false;
+        return Task.CompletedTask;
+    }
+
+    private async Task ShowAddedToastAsync(PetShop.Models.ProductDto_temp product)
+    {
+        toastMessage = "Đã thêm sản phẩm vào giỏ hàng!";
+        toastVisible = true;
+        StateHasChanged();
+        await Task.Delay(3000);
+        toastVisible = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void HandleCartChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        CartState.Changed -= HandleCartChanged;
+    }
+}

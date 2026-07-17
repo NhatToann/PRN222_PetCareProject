@@ -1,0 +1,190 @@
+@page "/products"
+@inject PetShop.Interfaces.IProductCatalogClient ProductCatalog
+@inject PetShop.Services.CartStateService CartState
+@inject PetShop.Services.UserSessionService UserSession
+@inject NavigationManager Navigation
+@implements IDisposable
+
+<PageTitle>Kết quả tìm kiếm – Pet Toy Shop</PageTitle>
+
+<div class="home-page">
+    <TopBar />
+    <Header OnOpenCart="OpenCart" />
+    <Navigation />
+
+    <main class="products-search-page">
+        <div class="container products-shell">
+            <div class="products-intro">
+                <div>
+                    <h1>Kết quả tìm kiếm</h1>
+                    <p>
+                        @if (!string.IsNullOrWhiteSpace(Keyword))
+                        {
+                            <span>Từ khóa: <strong>"@Keyword"</strong></span>
+                        }
+                        else
+                        {
+                            <span>Tất cả sản phẩm dành cho thú cưng</span>
+                        }
+                    </p>
+                    @if (!string.IsNullOrWhiteSpace(Keyword))
+                    {
+                        <button type="button" class="products-create-btn" style="margin-top:8px" @onclick="HandleClearSearch">Xóa từ khóa</button>
+                    }
+                </div>
+
+                <div class="products-intro-actions">
+                    <div class="products-badge">@filteredProducts.Count sản phẩm</div>
+                    @if (isStaff)
+                    {
+                        <button type="button" class="products-trash-nav-btn" @onclick="GoDeletedProducts">Những sản phẩm đã xóa</button>
+                    }
+                    @if (canCreateProduct)
+                    {
+                        <button type="button" class="products-create-btn" @onclick="GoCreateProduct">Tạo sản phẩm</button>
+                        <button type="button" class="products-create-btn" @onclick="GoSystem">Xem doanh thu</button>
+                    }
+                </div>
+            </div>
+
+            <div class="products-layout">
+                <ProductsSidebar Title="Danh mục đồ chơi"
+                                 Categories="categories"
+                                 SelectedCategoryId="selectedCategoryId"
+                                 OnChange="HandleCategoryChange" />
+
+                <section class="products-content">
+                    @if (isLoading)
+                    {
+                        <div class="products-loading">Đang tải sản phẩm...</div>
+                    }
+                    @if (!isLoading && !string.IsNullOrWhiteSpace(error))
+                    {
+                        <div class="products-error">@error</div>
+                    }
+                    @if (!isLoading && string.IsNullOrWhiteSpace(error) && filteredProducts.Count == 0)
+                    {
+                        <div class="products-empty">Không tìm thấy sản phẩm phù hợp.</div>
+                    }
+                    @if (!isLoading && string.IsNullOrWhiteSpace(error) && filteredProducts.Count > 0)
+                    {
+                        <div class="products-grid">
+                            @foreach (var product in filteredProducts)
+                            {
+                                <ProductCard Product="product"
+                                             Variant="featured"
+                                             ShowActions="false" />
+                            }
+                        </div>
+                    }
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <Footer />
+    <CartDrawer Open="cartDrawerOpen" OnClose="CloseCart" />
+</div>
+
+@code {
+    private IReadOnlyList<PetShop.Models.ProductDto_temp> products = Array.Empty<PetShop.Models.ProductDto_temp>();
+    private IReadOnlyList<ProductsSidebar.CategoryOption> categories = Array.Empty<ProductsSidebar.CategoryOption>();
+    private bool cartDrawerOpen;
+    private bool isLoading = true;
+    private string? error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Keyword = Keyword?.Trim();
+        isLoading = true;
+        error = null;
+        var result = await ProductCatalog.GetProductsAsync(Keyword, null);
+        products = result.Data ?? Array.Empty<PetShop.Models.ProductDto_temp>();
+        error = result.Error;
+        categories = BuildCategories(products);
+        isLoading = false;
+    }
+
+    protected override void OnInitialized()
+    {
+        CartState.Changed += HandleCartChanged;
+        UserSession.Changed += HandleSessionChanged;
+    }
+
+    [SupplyParameterFromQuery(Name = "q")] private string? Keyword { get; set; }
+    [SupplyParameterFromQuery(Name = "categoryId")] private int? selectedCategoryId { get; set; }
+
+    private IReadOnlyList<PetShop.Models.ProductDto_temp> filteredProducts =>
+        selectedCategoryId is null
+            ? products
+            : products.Where(p => p.CategoryId == selectedCategoryId).ToArray();
+
+    private string Role => (UserSession.CurrentUser?.Role ?? string.Empty).ToLowerInvariant();
+    private bool canCreateProduct => Role is "staff" or "admin";
+    private bool isStaff => Role == "staff";
+
+    private async Task HandleCategoryChange(int? categoryId)
+    {
+        selectedCategoryId = categoryId;
+        var parameters = new Dictionary<string, object?>();
+        if (!string.IsNullOrWhiteSpace(Keyword))
+        {
+            parameters["q"] = Keyword;
+        }
+        if (categoryId is not null)
+        {
+            parameters["categoryId"] = categoryId;
+        }
+        await Task.CompletedTask;
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameters("/products", parameters));
+    }
+
+    private void HandleClearSearch()
+    {
+        selectedCategoryId = null;
+        var parameters = new Dictionary<string, object?>();
+        if (selectedCategoryId is not null)
+        {
+            parameters["categoryId"] = selectedCategoryId;
+        }
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameters("/products", parameters));
+    }
+
+    private void GoCreateProduct() => Navigation.NavigateTo("/products/create");
+    private void GoDeletedProducts() => Navigation.NavigateTo("/products/deleted");
+    private void GoSystem() => Navigation.NavigateTo("/system");
+
+    private static IReadOnlyList<ProductsSidebar.CategoryOption> BuildCategories(IReadOnlyList<PetShop.Models.ProductDto_temp> source)
+    {
+        var map = new Dictionary<int, string>();
+        foreach (var product in source)
+        {
+            if (product.CategoryId is int catId && !string.IsNullOrWhiteSpace(product.CategoryName) && !map.ContainsKey(catId))
+            {
+                map[catId] = product.CategoryName;
+            }
+        }
+        return map.Select(kv => new ProductsSidebar.CategoryOption(kv.Key, kv.Value)).ToArray();
+    }
+
+    private Task OpenCart()
+    {
+        cartDrawerOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private Task CloseCart()
+    {
+        cartDrawerOpen = false;
+        return Task.CompletedTask;
+    }
+
+    private void HandleCartChanged() => InvokeAsync(StateHasChanged);
+    private void HandleSessionChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        CartState.Changed -= HandleCartChanged;
+        UserSession.Changed -= HandleSessionChanged;
+    }
+}

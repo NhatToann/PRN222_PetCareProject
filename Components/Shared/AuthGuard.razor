@@ -1,0 +1,57 @@
+@inject NavigationManager Navigation
+@inject UserSessionService UserSession
+
+@if (_checking || _redirecting)
+{
+    @* Renders nothing while checking auth and redirecting *@
+}
+else
+{
+    @ChildContent
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public RenderFragment? ChildContent { get; set; }
+
+    private bool _checking = true;
+    private bool _redirecting;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        try
+        {
+            await UserSession.LoadAsync();
+        }
+        catch
+        {
+            // Protected browser storage is only available after the circuit is interactive.
+        }
+
+        _checking = false;
+
+        if (!UserSession.IsAuthenticated)
+        {
+            _redirecting = true;
+            StateHasChanged();
+            Navigation.NavigateTo("/login", forceLoad: true);
+            return;
+        }
+
+        var role = UserSession.CurrentUser?.Role?.ToLowerInvariant() ?? "";
+        if (role == "staff")
+        {
+            _redirecting = true;
+            StateHasChanged();
+            Navigation.NavigateTo("/system", forceLoad: true);
+            return;
+        }
+
+        StateHasChanged();
+    }
+}

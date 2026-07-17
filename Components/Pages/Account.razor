@@ -1,0 +1,330 @@
+@page "/account"
+@page "/profile/edit"
+@inject PetShop.Services.UserSessionService UserSession
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@using System.Globalization
+@using System.Text.Json
+@using Microsoft.AspNetCore.Components.Forms
+
+<PageTitle>Chỉnh sửa thông tin</PageTitle>
+
+<div class="home-page">
+    <TopBar />
+    <Header />
+    <Navigation />
+
+    <CustomerOnlyGuard>
+        <main class="profile-page">
+            <div class="container">
+                <section class="profile-card profile-shopee">
+                    <div class="profile-shopee__top">
+                        <div class="profile-shopee__titles">
+                            <h1 class="profile-shopee__h1">Chỉnh sửa thông tin</h1>
+                            <p class="profile-shopee__sub">
+                                @(loaded ? "Cập nhật thông tin cá nhân của bạn." : "Đang tải thông tin cá nhân...")
+                            </p>
+                        </div>
+                        <div class="profile-shopee__actions">
+                            <button type="button" class="profile-shopee-btn profile-shopee-btn--secondary" @onclick="GoPets">
+                                Thông tin thú cưng
+                            </button>
+                            <button type="button" class="profile-shopee-btn profile-shopee-btn--secondary" @onclick="GoOrders">
+                                Lịch sử đơn hàng
+                            </button>
+                            <button type="button" class="profile-shopee-btn profile-shopee-btn--ghost" @onclick="GoBack">
+                                Quay lại
+                            </button>
+                        </div>
+                    </div>
+
+                    <hr class="profile-shopee__rule" />
+
+                    <form class="profile-shopee__body" @onsubmit="SaveAsync" @onsubmit:preventDefault="true">
+                        <div class="profile-shopee__main profile-shopee__main--form">
+                            <label class="profile-shopee__fieldRow">
+                                <span class="profile-shopee__label">Họ và tên</span>
+                                <input class="profile-shopee__input"
+                                       value="@fullName"
+                                       @oninput="(e) => fullName = e.Value?.ToString() ?? string.Empty"
+                                       placeholder="Nhập họ và tên"
+                                       disabled="@(!loaded)" />
+                            </label>
+
+                            <label class="profile-shopee__fieldRow profile-shopee__fieldRow--split">
+                                <span class="profile-shopee__label">Ngày sinh</span>
+                                <input class="profile-shopee__input"
+                                       value="@birthDate"
+                                       @oninput="(e) => birthDate = MaskDigitsToDmy(e.Value?.ToString() ?? string.Empty)"
+                                       placeholder="dd/mm/yyyy"
+                                       inputmode="numeric"
+                                       disabled="@(!loaded)" />
+                            </label>
+
+                            <label class="profile-shopee__fieldRow">
+                                <span class="profile-shopee__label">Số điện thoại</span>
+                                <input class="profile-shopee__input"
+                                       value="@phone"
+                                       @oninput="(e) => phone = e.Value?.ToString() ?? string.Empty"
+                                       placeholder="Nhập số điện thoại"
+                                       disabled="@(!loaded)" />
+                            </label>
+
+                            <label class="profile-shopee__fieldRow">
+                                <span class="profile-shopee__label">Email</span>
+                                <input class="profile-shopee__input"
+                                       value="@email"
+                                       @oninput="(e) => email = e.Value?.ToString() ?? string.Empty"
+                                       placeholder="Nhập email"
+                                       disabled="@(!loaded)" />
+                            </label>
+
+                            <label class="profile-shopee__fieldRow profile-shopee__fieldRow--address">
+                                <span class="profile-shopee__label">Địa chỉ</span>
+                                <textarea class="profile-shopee__input"
+                                          value="@address"
+                                          @oninput="(e) => address = e.Value?.ToString() ?? string.Empty"
+                                          rows="2"
+                                          placeholder="Nhập địa chỉ"
+                                          style="resize:vertical"
+                                          disabled="@(!loaded)"></textarea>
+                            </label>
+                        </div>
+
+                        <aside class="profile-shopee__aside profile-shopee__aside--edit">
+                            <div class="profile-shopee__avatarRing" aria-hidden="true">
+                                @if (!string.IsNullOrWhiteSpace(avatarUrl))
+                                {
+                                    <img src="@avatarUrl" alt="" class="profile-shopee__avatarImg" />
+                                }
+                                else
+                                {
+                                    <div class="profile-shopee__avatarFallback">@Initial</div>
+                                }
+                            </div>
+                            <label class="profile-shopee__choosePhoto" for="profile-avatar-file">Chọn ảnh</label>
+                            <p class="profile-shopee__photoHint">
+                                Dung lượng file tối đa 4 MB.
+                                <br />
+                                Định dạng: .JPEG, .PNG
+                            </p>
+                            <InputFile id="profile-avatar-file" class="profile-avatarInput" accept="image/*" OnChange="OnAvatarSelectedAsync" />
+                        </aside>
+                    </form>
+
+                    @if (!string.IsNullOrWhiteSpace(error))
+                    {
+                        <div class="profile-shopee__error">@error</div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(success))
+                    {
+                        <div class="pet-page__notice pet-page__notice--success">@success</div>
+                    }
+
+                    <div class="profile-shopee__formFooter">
+                        <button type="button" class="profile-shopee-btn profile-shopee-btn--ghost" @onclick="GoBack">Hủy</button>
+                        <button type="button" class="profile-shopee-btn profile-shopee-btn--primary" disabled="@(!loaded || saving)" @onclick="SaveAsync">
+                            @(saving ? "Đang lưu..." : "Lưu")
+                        </button>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <Footer />
+    </CustomerOnlyGuard>
+</div>
+
+@code {
+    private bool loaded;
+    private bool pendingLoad = true;
+    private bool saving;
+    private string fullName = "";
+    private string phone = "";
+    private string email = "";
+    private string address = "";
+    private string birthDate = "";
+    private string avatarUrl = "";
+    private string? error;
+    private string? success;
+
+    private string Initial
+    {
+        get
+        {
+            var source = string.IsNullOrWhiteSpace(fullName) ? email : fullName;
+            return string.IsNullOrWhiteSpace(source)
+                ? "U"
+                : source.Trim()[0].ToString().ToUpperInvariant();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!pendingLoad)
+        {
+            return;
+        }
+
+        pendingLoad = false;
+        await LoadProfileAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadProfileAsync()
+    {
+        error = null;
+        success = null;
+        await UserSession.LoadAsync();
+        var user = UserSession.CurrentUser;
+        if (user is null)
+        {
+            loaded = true;
+            return;
+        }
+
+        var draft = await ReadDraftAsync(user.UserId);
+        fullName = FirstNonEmpty(draft?.FullName, user.Name);
+        email = FirstNonEmpty(draft?.Email, user.Email);
+        phone = draft?.Phone ?? "";
+        address = draft?.Address ?? "";
+        birthDate = NormalizeBirthDateForDisplay(draft?.BirthDate ?? "");
+        avatarUrl = draft?.AvatarUrl ?? "";
+        loaded = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (!loaded || saving)
+        {
+            return;
+        }
+
+        var user = UserSession.CurrentUser;
+        if (user is null)
+        {
+            Navigation.NavigateTo("/login", forceLoad: true);
+            return;
+        }
+
+        error = null;
+        success = null;
+        var trimmedBirthDate = birthDate.Trim();
+        if (!string.IsNullOrWhiteSpace(trimmedBirthDate) && !IsValidDmy(trimmedBirthDate))
+        {
+            error = "Ngày sinh không tồn tại";
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            var draft = new ProfileDraft(
+                fullName.Trim(),
+                phone.Trim(),
+                email.Trim(),
+                address.Trim(),
+                trimmedBirthDate,
+                avatarUrl,
+                DateTime.UtcNow);
+            await JS.InvokeVoidAsync("localStorage.setItem", ProfileKey(user.UserId), JsonSerializer.Serialize(draft));
+            success = "Đã lưu thông tin cá nhân.";
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task OnAvatarSelectedAsync(InputFileChangeEventArgs e)
+    {
+        error = null;
+        success = null;
+        var file = e.File;
+        if (file is null)
+        {
+            return;
+        }
+
+        if (!file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            error = "Chỉ hỗ trợ file ảnh.";
+            return;
+        }
+
+        const long maxBytes = 4 * 1024 * 1024;
+        if (file.Size > maxBytes)
+        {
+            error = "Dung lượng file tối đa 4 MB.";
+            return;
+        }
+
+        await using var stream = file.OpenReadStream(maxBytes);
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms);
+        avatarUrl = $"data:{file.ContentType};base64,{Convert.ToBase64String(ms.ToArray())}";
+    }
+
+    private async Task<ProfileDraft?> ReadDraftAsync(int userId)
+    {
+        try
+        {
+            var raw = await JS.InvokeAsync<string?>("localStorage.getItem", ProfileKey(userId));
+            return string.IsNullOrWhiteSpace(raw)
+                ? null
+                : JsonSerializer.Deserialize<ProfileDraft>(raw, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private void GoPets() => Navigation.NavigateTo("/account/pets");
+
+    private void GoOrders() => Navigation.NavigateTo("/account/orders");
+
+    private void GoBack() => Navigation.NavigateTo(UserSession.CurrentUser?.Role?.Equals("staff", StringComparison.OrdinalIgnoreCase) == true ? "/system" : "/");
+
+    private static string ProfileKey(int userId) => $"userProfile:{userId.ToString(CultureInfo.InvariantCulture).ToLowerInvariant()}";
+
+    private static string FirstNonEmpty(params string?[] values) =>
+        values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v))?.Trim() ?? "";
+
+    private static string MaskDigitsToDmy(string value)
+    {
+        var digits = new string((value ?? "").Where(char.IsDigit).Take(8).ToArray());
+        var dd = digits.Length >= 2 ? digits[..2] : digits;
+        var mm = digits.Length >= 4 ? digits[2..4] : digits.Length > 2 ? digits[2..] : "";
+        var yyyy = digits.Length > 4 ? digits[4..] : "";
+        if (digits.Length <= 2) return dd;
+        if (digits.Length <= 4) return $"{dd}/{mm}";
+        return $"{dd}/{mm}/{yyyy}";
+    }
+
+    private static string NormalizeBirthDateForDisplay(string value)
+    {
+        var raw = (value ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(raw)) return "";
+        if (IsValidDmy(raw)) return raw;
+        return DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.None, out var d)
+            ? d.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)
+            : "";
+    }
+
+    private static bool IsValidDmy(string value) =>
+        DateTime.TryParseExact(value, "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out _);
+
+    private sealed record ProfileDraft(
+        string? FullName,
+        string? Phone,
+        string? Email,
+        string? Address,
+        string? BirthDate,
+        string? AvatarUrl,
+        DateTime UpdatedAt);
+}

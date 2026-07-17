@@ -1,0 +1,36 @@
+@inject NavigationManager Navigation
+
+<form class="search-bar" @onsubmit="SubmitAsync" @onsubmit:preventDefault="true">
+    <input value="@Keyword" @oninput="OnInput" placeholder="Search pet products" aria-label="Search products" />
+    <button type="submit" disabled="@IsDisabled">Search</button>
+</form>
+
+@code {
+    [Parameter] public string? InitialKeyword { get; set; }
+
+    private string Keyword { get; set; } = string.Empty;
+
+    private bool IsDisabled => string.IsNullOrWhiteSpace(Keyword);
+
+    protected override void OnParametersSet()
+    {
+        Keyword = InitialKeyword ?? string.Empty;
+    }
+
+    private void OnInput(ChangeEventArgs args)
+    {
+        Keyword = args.Value?.ToString() ?? string.Empty;
+    }
+
+    private Task SubmitAsync()
+    {
+        var keyword = Keyword.Trim();
+        if (keyword.Length == 0)
+        {
+            return Task.CompletedTask;
+        }
+
+        Navigation.NavigateTo($"/products?keyword={Uri.EscapeDataString(keyword)}");
+        return Task.CompletedTask;
+    }
+}

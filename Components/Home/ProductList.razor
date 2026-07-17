@@ -1,0 +1,86 @@
+@using PetShop.Models
+
+<section class="products-section" id="featured-products">
+    <div class="container container--home-wide">
+        <div class="home-section-head">
+            <h2 class="section-title">
+                <span class="section-title__label">@(string.IsNullOrWhiteSpace(Keyword) ? "Sản phẩm nổi bật" : $"Kết quả tìm kiếm cho \"{Keyword}\"")</span>
+                <span class="section-title__paws" aria-hidden="true">
+                    <i class="fas fa-paw section-title__paw section-title__paw--a"></i>
+                    <i class="fas fa-paw section-title__paw section-title__paw--b"></i>
+                </span>
+            </h2>
+            @if (HasMoreOnHome)
+            {
+                <button type="button" class="section-view-all" @onclick="ToggleShowAll">
+                    @(showAllProducts ? "Thu gọn" : "Xem tất cả")
+                    <span class="section-view-all__arrow" aria-hidden="true">
+                        <i class="fas @(showAllProducts ? "fa-chevron-up" : "fa-arrow-right")"></i>
+                    </span>
+                </button>
+            }
+        </div>
+
+        @if (Loading)
+        {
+            <div class="products-grid products-grid--featured">
+                @for (var i = 0; i < 10; i++)
+                {
+                    <div class="product-card-skeleton">
+                        <div class="skeleton-image"></div>
+                        <div class="skeleton-title"></div>
+                        <div class="skeleton-price"></div>
+                    </div>
+                }
+            </div>
+        }
+        else if (!string.IsNullOrWhiteSpace(Error))
+        {
+            <div class="error-message" style="text-align: center; padding: 3rem; background: rgba(255,140,148,0.1); border-radius: 22px; color: #FF8C94">
+                <p style="font-size: 1.2rem; margin-bottom: 1rem">ERROR: @Error</p>
+                <button class="retry-button" type="button" @onclick="OnRetry" style="padding: 0.8rem 2rem; background: linear-gradient(135deg, var(--primary), var(--secondary)); border: none; border-radius: 18px; color: white; font-weight: 600; cursor: pointer; font-size: 1rem">Thử lại</button>
+            </div>
+        }
+        else if (Products.Count == 0)
+        {
+            <div style="text-align: center; padding: 3rem; opacity: 0.7">
+                @(string.IsNullOrWhiteSpace(Keyword) ? "Chưa có sản phẩm nào." : "Không tìm thấy sản phẩm phù hợp.")
+            </div>
+        }
+        else
+        {
+            <div class="products-grid products-grid--featured">
+                @foreach (var product in VisibleProducts)
+                {
+                    <ProductCard Product="product" Variant="featured" OnAddToCart="OnAddToCart" />
+                }
+            </div>
+        }
+    </div>
+</section>
+
+@code {
+    private const int FeaturedPreviewCount = 10;
+    private bool showAllProducts;
+
+    [Parameter] public IReadOnlyList<ProductDto_temp> Products { get; set; } = Array.Empty<ProductDto_temp>();
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public string Keyword { get; set; } = string.Empty;
+    [Parameter] public EventCallback<ProductDto_temp> OnAddToCart { get; set; }
+    [Parameter] public EventCallback OnRetry { get; set; }
+
+    private bool HasMoreOnHome => string.IsNullOrWhiteSpace(Keyword) && Products.Count > FeaturedPreviewCount;
+
+    private IEnumerable<ProductDto_temp> VisibleProducts => showAllProducts ? Products : Products.Take(FeaturedPreviewCount);
+
+    protected override void OnParametersSet()
+    {
+        if (!string.IsNullOrWhiteSpace(Keyword))
+        {
+            showAllProducts = false;
+        }
+    }
+
+    private void ToggleShowAll() => showAllProducts = !showAllProducts;
+}

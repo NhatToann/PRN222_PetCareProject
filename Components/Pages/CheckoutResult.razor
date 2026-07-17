@@ -1,0 +1,386 @@
+@page "/checkout/result"
+@inject PetShop.Interfaces.IPaymentClient PaymentClient
+@inject PetShop.Services.CartStateService CartState
+@inject PetShop.Services.UserSessionService UserSession
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject HttpClient Http
+@implements IDisposable
+
+<PageTitle>Kết quả thanh toán – Pet Toy Shop</PageTitle>
+
+<div class="checkout-result-page">
+    <TopBar />
+    <PageContextBar Title="Kết quả thanh toán" />
+
+    <AuthGuard>
+    <main class="checkout-result-main">
+        <div class="container">
+            @if (isLoading)
+            {
+                <div class="checkout-result-loading">
+                    <div class="checkout-result-spinner">
+                        <svg width="64" height="64" viewBox="0 0 64 64">
+                            <circle cx="32" cy="32" r="28" fill="none" stroke="#eee" stroke-width="6" />
+                            <path d="M32 4 A28 28 0 0 1 60 32" fill="none" stroke="#4CAF50" stroke-width="6" stroke-linecap="round">
+                                <animateTransform attributeName="transform" type="rotate" from="0 32 32" to="360 32 32" dur="1s" repeatCount="indefinite" />
+                            </path>
+                        </svg>
+                    </div>
+                    <h2>Đang xác nhận thanh toán...</h2>
+                    <p class="checkout-result-hint">Vui lòng chờ trong giây lát</p>
+                </div>
+            }
+            else if (status == "pending")
+            {
+                <div class="checkout-result-card">
+                    <div class="checkout-result-icon checkout-result-icon--pending">
+                        <svg width="80" height="80" viewBox="0 0 80 80">
+                            <circle cx="40" cy="40" r="38" fill="#2196F3" />
+                            <path d="M40 20 L40 44 M40 52 L40 56" fill="none" stroke="white" stroke-width="5" stroke-linecap="round" />
+                        </svg>
+                    </div>
+                    <h1 class="checkout-result-title">Chưa thanh toán</h1>
+                    <p class="checkout-result-message">
+                        Đơn hàng của bạn đang chờ thanh toán PayOS. Vui lòng hoàn tất thanh toán trong thời gian sớm nhất.
+                    </p>
+                    @if (!string.IsNullOrWhiteSpace(checkoutUrl))
+                    {
+                        <p class="checkout-result-link-expired">
+                            Link thanh toán đã hết hạn?
+                            <a href="@checkoutUrl" target="_blank" rel="noopener noreferrer">Nhấn vào đây để thanh toán</a>
+                        </p>
+                    }
+                    <div class="checkout-result-actions">
+                        @if (!string.IsNullOrWhiteSpace(checkoutUrl))
+                        {
+                            <button type="button" class="checkout-result-btn checkout-result-btn--primary" @onclick="RetryPayment">
+                                Thanh toán ngay
+                            </button>
+                        }
+                        <button type="button" class="checkout-result-btn checkout-result-btn--secondary" @onclick="BackToCart">
+                            Quay lại giỏ hàng
+                        </button>
+                    </div>
+                </div>
+            }
+            else if (status == "success")
+            {
+                <div class="checkout-result-card">
+                    <div class="checkout-result-icon checkout-result-icon--success">
+                        <svg width="80" height="80" viewBox="0 0 80 80">
+                            <circle cx="40" cy="40" r="38" fill="#4CAF50" />
+                            <path d="M24 40 L35 51 L56 30" fill="none" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                    </div>
+                    <h1 class="checkout-result-title">Thanh toán thành công!</h1>
+                    <p class="checkout-result-message">
+                        Cảm ơn bạn đã đặt hàng. Đơn hàng của bạn đang được xử lý.
+                    </p>
+                    @if (orderInfo is not null)
+                    {
+                        <div class="checkout-result-order-info">
+                            <div class="checkout-result-order-row">
+                                <span class="checkout-result-order-label">Mã đơn hàng:</span>
+                                <span class="checkout-result-order-value">#@orderInfo.orderId</span>
+                            </div>
+                            <div class="checkout-result-order-row">
+                                <span class="checkout-result-order-label">Tổng tiền:</span>
+                                <span class="checkout-result-order-value">@FormatPrice(orderInfo.totalAmount)</span>
+                            </div>
+                        </div>
+                    }
+                    <div class="checkout-result-actions">
+                        <button type="button" class="checkout-result-btn checkout-result-btn--secondary" @onclick="ContinueShopping">
+                            Tiếp tục mua sắm
+                        </button>
+                        <button type="button" class="checkout-result-btn checkout-result-btn--primary" @onclick="ViewOrder">
+                            Xem đơn hàng
+                        </button>
+                    </div>
+                </div>
+            }
+            else if (status == "cancelled")
+            {
+                <div class="checkout-result-card">
+                    <div class="checkout-result-icon checkout-result-icon--cancelled">
+                        <svg width="80" height="80" viewBox="0 0 80 80">
+                            <circle cx="40" cy="40" r="38" fill="#FF9800" />
+                            <path d="M26 26 L54 54 M54 26 L26 54" fill="none" stroke="white" stroke-width="5" stroke-linecap="round" />
+                        </svg>
+                    </div>
+                    <h1 class="checkout-result-title">Thanh toán đã bị hủy</h1>
+                    <p class="checkout-result-message">
+                        Thanh toán PayOS đã bị hủy hoặc hết hạn. Đơn hàng của bạn chưa được xác nhận.
+                    </p>
+                    @if (!string.IsNullOrWhiteSpace(payosStatus))
+                    {
+                        <p class="checkout-result-payos-status">Trạng thái PayOS: @payosStatus</p>
+                    }
+                    <div class="checkout-result-actions">
+                        <button type="button" class="checkout-result-btn checkout-result-btn--primary" @onclick="BackToCart">
+                            Quay lại giỏ hàng
+                        </button>
+                    </div>
+                </div>
+            }
+            else if (status == "error")
+            {
+                <div class="checkout-result-card">
+                    <div class="checkout-result-icon checkout-result-icon--error">
+                        <svg width="80" height="80" viewBox="0 0 80 80">
+                            <circle cx="40" cy="40" r="38" fill="#f44336" />
+                            <path d="M40 24 L40 44" fill="none" stroke="white" stroke-width="5" stroke-linecap="round" />
+                            <circle cx="40" cy="54" r="3" fill="white" />
+                        </svg>
+                    </div>
+                    <h1 class="checkout-result-title">Đã xảy ra lỗi</h1>
+                    <p class="checkout-result-message">
+                        @(string.IsNullOrWhiteSpace(errorMessage) ? "Không thể xác nhận trạng thái thanh toán. Vui lòng liên hệ hỗ trợ." : errorMessage)
+                    </p>
+                    <div class="checkout-result-actions">
+                        <button type="button" class="checkout-result-btn checkout-result-btn--primary" @onclick="BackToCart">
+                            Quay lại giỏ hàng
+                        </button>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="checkout-result-card">
+                    <div class="checkout-result-icon checkout-result-icon--error">
+                        <svg width="80" height="80" viewBox="0 0 80 80">
+                            <circle cx="40" cy="40" r="38" fill="#f44336" />
+                            <path d="M40 24 L40 44" fill="none" stroke="white" stroke-width="5" stroke-linecap="round" />
+                            <circle cx="40" cy="54" r="3" fill="white" />
+                        </svg>
+                    </div>
+                    <h1 class="checkout-result-title">Không tìm thấy đơn hàng</h1>
+                    <p class="checkout-result-message">Không có thông tin thanh toán. Vui lòng kiểm tra lại.</p>
+                    <div class="checkout-result-actions">
+                        <button type="button" class="checkout-result-btn checkout-result-btn--primary" @onclick="BackToCart">
+                            Quay lại giỏ hàng
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    </main>
+    </AuthGuard>
+
+    <Footer />
+</div>
+
+@code {
+    private string? status;
+    private bool isLoading = true;
+    private string? errorMessage;
+    private string? checkoutUrl;
+    private string? payosStatus;
+    private PendingOrderInfo? orderInfo;
+
+    [SupplyParameterFromQuery(Name = "cancel")] private string? Cancel { get; set; }
+    [SupplyParameterFromQuery(Name = "status")] private string? PayOsStatus { get; set; }
+    [SupplyParameterFromQuery(Name = "orderCode")] private string? PayOsOrderCode { get; set; }
+
+    protected override void OnInitialized()
+    {
+        CartState.Changed += HandleCartChanged;
+        UserSession.Changed += HandleSessionChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await CartState.LoadAsync();
+            await UserSession.LoadAsync();
+            await CheckPaymentStatusAsync();
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CheckPaymentStatusAsync()
+    {
+        try
+        {
+            // PayOS cancel redirect: ?cancel=true&status=CANCELLED&orderCode=...
+            // Handle this FIRST before checking localStorage.
+            // RT-J FIX: Call the status endpoint so the backend auto-cancels the order in DB.
+            if (string.Equals(Cancel, "true", StringComparison.OrdinalIgnoreCase))
+            {
+                status = "cancelled";
+                payosStatus = PayOsStatus;
+
+                // Attempt to sync DB cancel status (let backend handle order cancellation).
+                // Don't await — UX is already "cancelled", DB update can be eventual.
+                if (!string.IsNullOrWhiteSpace(PayOsOrderCode) && int.TryParse(PayOsOrderCode, out var cancelCode) && cancelCode > 0)
+                {
+                    _ = PaymentClient.GetPayOSStatusAsync(cancelCode);
+                }
+
+                await JS.InvokeVoidAsync("localStorage.removeItem", "pendingPayOSOrder");
+                await JS.InvokeVoidAsync("localStorage.removeItem", "lastSuccessfulOrderId");
+                return;
+            }
+
+            var pendingOrderRaw = await JS.InvokeAsync<string?>("localStorage.getItem", "pendingPayOSOrder");
+            if (string.IsNullOrWhiteSpace(pendingOrderRaw))
+            {
+                // No pending order — either direct navigation or duplicate callback.
+                // Check if this looks like a cancelled return (no localStorage but navigated here).
+                // Treat as cancelled so user isn't stuck on an error page.
+                status = "cancelled";
+                errorMessage = "Không tìm thấy thông tin đơn hàng đang chờ. Có thể bạn đã hủy thanh toán.";
+                return;
+            }
+
+            PendingOrderInfo? pendingOrder;
+            try
+            {
+                pendingOrder = System.Text.Json.JsonSerializer.Deserialize<PendingOrderInfo>(pendingOrderRaw);
+            }
+            catch
+            {
+                status = "error";
+                errorMessage = "Dữ liệu đơn hàng không hợp lệ.";
+                return;
+            }
+
+            if (pendingOrder is null || pendingOrder.orderCode <= 0)
+            {
+                status = "error";
+                errorMessage = "Mã đơn hàng không hợp lệ.";
+                return;
+            }
+
+            var result = await PaymentClient.GetPayOSStatusAsync(pendingOrder.orderCode);
+            if (!result.IsSuccess || result.Data is null)
+            {
+                status = "error";
+                errorMessage = result.Error ?? "Không thể xác nhận trạng thái thanh toán.";
+                return;
+            }
+
+            var payosData = result.Data;
+            checkoutUrl = payosData.CheckoutUrl;
+            payosStatus = payosData.Status;
+            orderInfo = pendingOrder;
+
+            if (payosData.IsPaid)
+            {
+                status = "success";
+                await JS.InvokeVoidAsync("localStorage.removeItem", "pendingPayOSOrder");
+                await JS.InvokeVoidAsync("localStorage.removeItem", "checkoutItems");
+                await CartState.ClearAsync();
+
+                return;
+            }
+
+            if (IsCancelledStatus(payosData.Status))
+            {
+                status = "cancelled";
+                await JS.InvokeVoidAsync("localStorage.removeItem", "pendingPayOSOrder");
+                return;
+            }
+
+            if (IsPendingStatus(payosData.Status))
+            {
+                // Pending with a valid checkout URL — user has not scanned yet.
+                status = "pending";
+                return;
+            }
+
+            // Any other status (null, unknown, empty, etc.) — treat as cancelled.
+            // This handles the case where PayOS returns without a clear status,
+            // e.g. user closed the QR page without scanning.
+            status = "cancelled";
+            await JS.InvokeVoidAsync("localStorage.removeItem", "pendingPayOSOrder");
+        }
+        catch (Exception ex)
+        {
+            status = "error";
+            errorMessage = "Có lỗi khi kiểm tra thanh toán: " + ex.Message;
+        }
+    }
+
+    private async Task TrySendInvoiceEmailAsync(int orderId)
+    {
+        try
+        {
+            await Http.PostAsJsonAsync("api/payos/send-invoice", new { orderId });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[CheckoutResult] Failed to trigger invoice email: {ex.Message}");
+        }
+    }
+
+    private static bool IsCancelledStatus(string? s)
+    {
+        if (string.IsNullOrWhiteSpace(s)) return true; // null/empty = cancelled
+        var upper = s.ToUpperInvariant();
+        return upper is "CANCELLED" or "EXPIRED" or "FAILED" or "ERROR";
+    }
+
+    private static bool IsPendingStatus(string? s)
+    {
+        if (string.IsNullOrWhiteSpace(s)) return false;
+        return s.ToUpperInvariant() is "PENDING";
+    }
+
+    private void RetryPayment()
+    {
+        if (!string.IsNullOrWhiteSpace(checkoutUrl))
+        {
+            Navigation.NavigateTo(checkoutUrl, forceLoad: true);
+        }
+        else
+        {
+            BackToCart();
+        }
+    }
+
+    private void BackToCart()
+    {
+        JS.InvokeVoidAsync("localStorage.removeItem", "pendingPayOSOrder");
+        Navigation.NavigateTo("/cart");
+    }
+
+    private void ContinueShopping()
+    {
+        Navigation.NavigateTo("/");
+    }
+
+    private void ViewOrder()
+    {
+        if (orderInfo?.orderId > 0)
+        {
+            Navigation.NavigateTo($"/account/orders/{orderInfo.orderId}");
+        }
+        else
+        {
+            Navigation.NavigateTo("/account/orders");
+        }
+    }
+
+    private void HandleCartChanged() => InvokeAsync(StateHasChanged);
+    private void HandleSessionChanged() => InvokeAsync(StateHasChanged);
+
+    private static string FormatPrice(decimal value) =>
+        string.Create(System.Globalization.CultureInfo.GetCultureInfo("vi-VN"), $"{value:C0}");
+
+    public void Dispose()
+    {
+        CartState.Changed -= HandleCartChanged;
+        UserSession.Changed -= HandleSessionChanged;
+    }
+
+    private sealed class PendingOrderInfo
+    {
+        public int orderId { get; set; }
+        public int orderCode { get; set; }
+        public decimal totalAmount { get; set; }
+    }
+}

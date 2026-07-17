@@ -1,0 +1,376 @@
+@page "/products/{ProductId:int}"
+@inject PetShop.Interfaces.IProductCatalogClient ProductCatalog
+@inject PetShop.Services.CartStateService CartState
+@inject PetShop.Services.UserSessionService UserSession
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@implements IDisposable
+
+<PageTitle>@(product?.Name ?? "Chi tiết sản phẩm")</PageTitle>
+
+<div class="home-page pd-page">
+    <TopBar />
+    <Header OnOpenCart="OpenCart" />
+    <Navigation />
+
+    <main>
+        <div class="pd-wrap">
+            @if (isLoading)
+            {
+                <div class="pd-state">Đang tải chi tiết sản phẩm…</div>
+            }
+            else if (!string.IsNullOrWhiteSpace(error))
+            {
+                <div class="pd-state">@error</div>
+            }
+            else if (product is null)
+            {
+                <div class="pd-state">Không có dữ liệu sản phẩm.</div>
+            }
+            else
+            {
+                <div class="pd-bc-bar">
+                    <nav class="pd-breadcrumb" aria-label="Breadcrumb">
+                        <a href="/">Trang chủ</a>
+                        <span class="pd-bc-sep">›</span>
+                        <a href="/products">Sản phẩm</a>
+                        @if (!string.IsNullOrWhiteSpace(product.CategoryName))
+                        {
+                            <span class="pd-bc-sep">›</span>
+                            <span>@product.CategoryName</span>
+                        }
+                        <span class="pd-bc-sep">›</span>
+                        <span class="pd-bc-current">@product.Name</span>
+                    </nav>
+                </div>
+
+                <div class="pd-layout-card">
+                    <div class="pd-two-col">
+                        <div class="pd-media">
+                            <div class="pd-main-img">
+                                <img src="@ImageUrl" alt="@product.Name" />
+                            </div>
+
+                            <div class="pd-thumbs-row">
+                                <button type="button" class="pd-thumb-nav" aria-label="Ảnh trước" disabled="@(productImages.Count <= 1)" @onclick="PrevThumb">‹</button>
+                                <div class="pd-thumbs-track">
+                                    @for (var i = 0; i < productImages.Count; i++)
+                                    {
+                                        var idx = i;
+                                        <button type="button"
+                                                class="pd-thumb @(idx == selectedImageIndex ? "is-active" : null)"
+                                                @onclick="() => SelectThumb(idx)"
+                                                aria-label="@($"Xem ảnh {idx + 1}")">
+                                            <img src="@productImages[idx]" alt="" />
+                                        </button>
+                                    }
+                                </div>
+                                <button type="button" class="pd-thumb-nav" aria-label="Ảnh sau" disabled="@(productImages.Count <= 1)" @onclick="NextThumb">›</button>
+                            </div>
+                        </div>
+
+                        <div class="pd-info">
+                            <div class="pd-info-head">
+                                @if (product.StockQuantity > 0)
+                                {
+                                    <span class="pd-stock-pill">Còn hàng</span>
+                                }
+                                else
+                                {
+                                    <span class="pd-stock-pill pd-stock-pill--out">Hết hàng</span>
+                                }
+                                <h1 class="pd-title">@product.Name</h1>
+                                <p class="pd-sku">
+                                    SKU: PET-@($"{product.ProductId:D6}")
+                                </p>
+                            </div>
+
+                            <div class="pd-price-hero">@FormatPrice(product.Price)</div>
+
+                            <div class="pd-stats-row pd-stats-row--compact">
+                                @if (displayRating.HasValue)
+                                {
+                                    <div class="pd-stats-rating">
+                                        <span class="pd-stars" aria-label="@($"{displayRating} sao")">
+                                            @for (var i = 0; i < 5; i++)
+                                            {
+                                                <span class="@(i < Math.Min(5, Math.Max(0, (int)Math.Round(displayRating.Value))) ? "on" : null)">★</span>
+                                            }
+                                        </span>
+                                        <span class="pd-rating-num">@displayRating.Value.ToString("0.0")</span>
+                                    </div>
+                                    <span class="pd-stats-muted">(0 đánh giá)</span>
+                                }
+                                else
+                                {
+                                    <span class="pd-stats-muted">Chưa có đánh giá</span>
+                                }
+                            </div>
+
+                            <div class="pd-info-block">
+                                <dl class="pd-info-line">
+                                    <dt>
+                                        <span class="pd-icon-truck" aria-hidden="true"></span>
+                                        Vận chuyển
+                                    </dt>
+                                    <dd>
+                                        Giao hàng tiêu chuẩn — dự kiến nhận <strong>@DeliveryHint</strong>
+                                        <br />
+                                        <span style="color: var(--pd-accent); font-weight: 600">Phí ship: liên hệ / 0đ khi dưới 8km</span>
+                                    </dd>
+                                </dl>
+                                <dl class="pd-info-line">
+                                    <dt>
+                                        <span class="pd-icon-shield" aria-hidden="true"></span>
+                                        An tâm mua
+                                    </dt>
+                                    <dd>Đổi trả trong 15 ngày nếu sản phẩm lỗi (theo chính sách cửa hàng).</dd>
+                                </dl>
+                            </div>
+
+                            @if (!string.IsNullOrWhiteSpace(product.Description))
+                            {
+                                <div class="pd-desc-block pd-desc-lead">
+                                    <div class="pd-desc-body">@product.Description</div>
+                                </div>
+                            }
+
+                            <div class="pd-purchase-card">
+                                <div class="pd-qty-section pd-qty-section--boxed">
+                                    <span class="pd-qty-label">Số lượng</span>
+                                    <div class="pd-qty" aria-label="Số lượng">
+                                        <button type="button" @onclick="DecrementQty" disabled="@(!CanAdd || Quantity <= 1)" aria-label="Giảm số lượng">−</button>
+                                        <span>@Quantity</span>
+                                        <button type="button" @onclick="IncrementQty" disabled="@(!CanAdd || Quantity >= SafeQtyMax)" aria-label="Tăng số lượng">+</button>
+                                    </div>
+                                    <span class="pd-stock-hint">
+                                        Còn <strong>@product.StockQuantity</strong> sản phẩm
+                                    </span>
+                                </div>
+
+                                <div class="pd-actions-row">
+                                    <button type="button" class="pd-btn-cart" @onclick="AddToCartAsync" disabled="@(!CanAdd)">
+                                        <i class="fas fa-shopping-bag" aria-hidden="true"></i>
+                                        Thêm vào giỏ hàng
+                                    </button>
+                                    <button type="button" class="pd-btn-buy" @onclick="BuyNowAsync" disabled="@(!CanAdd)">
+                                        Mua ngay
+                                    </button>
+                                </div>
+                            </div>
+
+                            @if (!string.IsNullOrWhiteSpace(product.CategoryName))
+                            {
+                                <div class="pd-meta-footer">
+                                    <p>
+                                        <span class="pd-meta-label">Danh mục:</span>
+                                        <span class="pd-meta-value">@product.CategoryName</span>
+                                    </p>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <section class="pd-reviews" aria-label="Đánh giá sản phẩm">
+                    <div class="pd-reviewsHead">
+                        <h2>Đánh giá sản phẩm</h2>
+                        <div class="pd-ratingSummary">
+                            <span class="pd-stars" aria-label="0 sao">
+                                @for (var i = 0; i < 5; i++)
+                                {
+                                    <span class="@(i < (int)Math.Round(product.AvgRating) ? "on" : null)">★</span>
+                                }
+                            </span>
+                            <span>
+                                @(product.ReviewCount > 0 ? $"{product.AvgRating:0.0}/5 ({product.ReviewCount})" : "Chưa có đánh giá")
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="pd-reviewsBody">
+                        <div class="pd-emptyReviews">Sản phẩm này chưa có đánh giá chi tiết. Hãy mua hàng và đánh giá sau.</div>
+                    </div>
+                </section>
+            }
+        </div>
+    </main>
+
+    <Footer />
+    <CartDrawer Open="cartDrawerOpen" OnClose="CloseCart" />
+</div>
+
+@code {
+    private const string FallbackImage = "https://images.unsplash.com/photo-1561948955-570b270e7c36?w=1200";
+
+    [Parameter] public int ProductId { get; set; }
+
+    private PetShop.Models.ProductDto_temp? product;
+    private bool isLoading = true;
+    private string? error;
+    private int Quantity = 1;
+    private int selectedImageIndex;
+    private bool cartDrawerOpen;
+
+    private IReadOnlyList<string> productImages => product is null
+        ? Array.Empty<string>()
+        : new[] { string.IsNullOrWhiteSpace(product.ImageUrl) ? FallbackImage : product.ImageUrl! };
+
+    private string ImageUrl => productImages.Count == 0
+        ? FallbackImage
+        : productImages[Math.Min(selectedImageIndex, productImages.Count - 1)];
+
+    private bool CanAdd => product is not null && product.StockQuantity > 0;
+    private int SafeQtyMax => Math.Max(1, product?.StockQuantity ?? 1);
+
+    private double? displayRating => product is null || product.ReviewCount == 0 ? null : product.AvgRating;
+
+    private string DeliveryHint => "2-3 ngày tới";
+
+    protected override void OnInitialized()
+    {
+        CartState.Changed += HandleCartChanged;
+        UserSession.Changed += HandleSessionChanged;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        isLoading = true;
+        error = null;
+        Quantity = 1;
+        selectedImageIndex = 0;
+
+        if (ProductId <= 0)
+        {
+            product = null;
+            error = "ID sản phẩm không hợp lệ.";
+            isLoading = false;
+            return;
+        }
+
+        var result = await ProductCatalog.GetProductAsync(ProductId);
+        product = result.Data;
+        if (product is null && string.IsNullOrWhiteSpace(result.Error))
+        {
+            error = "Không tìm thấy sản phẩm.";
+        }
+        else
+        {
+            error = result.Error;
+        }
+        isLoading = false;
+    }
+
+    private void IncrementQty()
+    {
+        if (!CanAdd) return;
+        Quantity = Math.Min(SafeQtyMax, Quantity + 1);
+    }
+
+    private void DecrementQty()
+    {
+        if (!CanAdd) return;
+        Quantity = Math.Max(1, Quantity - 1);
+    }
+
+    private void SelectThumb(int idx)
+    {
+        selectedImageIndex = idx;
+    }
+
+    private void PrevThumb()
+    {
+        if (productImages.Count <= 1) return;
+        selectedImageIndex = (selectedImageIndex - 1 + productImages.Count) % productImages.Count;
+    }
+
+    private void NextThumb()
+    {
+        if (productImages.Count <= 1) return;
+        selectedImageIndex = (selectedImageIndex + 1) % productImages.Count;
+    }
+
+    private async Task AddToCartAsync()
+    {
+        if (product is null) return;
+
+        if (!UserSession.IsAuthenticated)
+        {
+            await JS.InvokeVoidAsync("alert", "Bạn cần đăng nhập để thêm sản phẩm vào giỏ hàng.");
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        if (!CanAdd)
+        {
+            await JS.InvokeVoidAsync("alert", "Sản phẩm đã hết hàng.");
+            return;
+        }
+
+        for (var i = 0; i < Quantity; i++)
+        {
+            await CartState.AddAsync(product, 1);
+        }
+        cartDrawerOpen = true;
+    }
+
+    private async Task BuyNowAsync()
+    {
+        if (product is null) return;
+
+        if (!UserSession.IsAuthenticated)
+        {
+            await JS.InvokeVoidAsync("alert", "Bạn cần đăng nhập để mua ngay.");
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        if (!CanAdd)
+        {
+            await JS.InvokeVoidAsync("alert", "Sản phẩm đã hết hàng.");
+            return;
+        }
+
+        // Clear and add the buy-now quantity, then navigate to checkout.
+        await CartState.ClearAsync();
+        for (var i = 0; i < Quantity; i++)
+        {
+            await CartState.AddAsync(product, 1);
+        }
+
+        // Persist only the buy-now product to sessionStorage — Checkout.razor reads this key.
+        var checkoutItems = new List<CheckoutStorageItem>
+        {
+            new(product.ProductId, product.Name, product.Price, product.ImageUrl, Quantity)
+        };
+        await JS.InvokeVoidAsync("sessionStorage.setItem", "checkoutItems", System.Text.Json.JsonSerializer.Serialize(checkoutItems));
+
+        Navigation.NavigateTo("/cart/checkout");
+    }
+
+    private sealed record CheckoutStorageItem(int ProductId, string Name, decimal Price, string? ImageUrl, int Quantity);
+
+    private Task OpenCart()
+    {
+        cartDrawerOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private Task CloseCart()
+    {
+        cartDrawerOpen = false;
+        return Task.CompletedTask;
+    }
+
+    private void HandleCartChanged() => InvokeAsync(StateHasChanged);
+    private void HandleSessionChanged() => InvokeAsync(StateHasChanged);
+
+    private static string FormatPrice(decimal value) =>
+        string.Create(System.Globalization.CultureInfo.GetCultureInfo("vi-VN"), $"{value:C0}");
+
+    public void Dispose()
+    {
+        CartState.Changed -= HandleCartChanged;
+        UserSession.Changed -= HandleSessionChanged;
+    }
+}

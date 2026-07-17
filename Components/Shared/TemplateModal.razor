@@ -1,0 +1,28 @@
+@if (Open)
+{
+    <div class="cart-drawer-root" role="dialog" aria-modal="true" aria-labelledby="@TitleId">
+        <button type="button" class="cart-drawer-backdrop" aria-label="Đóng" @onclick="CloseAsync"></button>
+        <section class="cart-drawer" style="max-width: @MaxWidth">
+            <header class="cart-drawer__header">
+                <h2 id="@TitleId" class="cart-drawer__title">@Title</h2>
+                <button type="button" class="cart-drawer__close" @onclick="CloseAsync" aria-label="Đóng">
+                    <span class="cart-drawer__close-label">Đóng</span>
+                    <span class="cart-drawer__close-icon" aria-hidden="true">×</span>
+                </button>
+            </header>
+            <div class="cart-drawer__body">@ChildContent</div>
+        </section>
+    </div>
+}
+
+@code {
+    private readonly string TitleId = $"template-modal-{Guid.NewGuid():N}";
+
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public string MaxWidth { get; set; } = "560px";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private Task CloseAsync() => OnClose.InvokeAsync();
+}

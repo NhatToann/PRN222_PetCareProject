@@ -1,0 +1,330 @@
+/* CodConfirmationPage - Xác nhận đặt hàng COD thành công */
+
+@import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Nunito:wght@400;500;600;700&display=swap');
+
+:root {
+    --primary: #4a2477;
+    --primary-dark: #7b3eb6;
+    --primary-pale: #f0e6f7;
+    --text-dark: #1a1a2e;
+    --text-medium: #4a4a5a;
+    --text-light: #6b7280;
+    --bg-light: #f5f5f5;
+    --bg-white: #ffffff;
+}
+
+.cod-confirmation-page {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-light);
+    font-family: 'Quicksand', 'Nunito', sans-serif;
+}
+
+.cod-confirmation-content {
+    flex: 1;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 32px 16px 48px;
+    width: 100%;
+}
+
+/* Success Banner */
+.success-banner {
+    text-align: center;
+    background: var(--bg-white);
+    border-radius: 16px;
+    padding: 48px 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 20px rgba(74, 36, 119, 0.08);
+}
+
+.success-icon {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+}
+
+.success-icon svg,
+.success-icon i {
+    font-size: 36px;
+    color: #fff;
+}
+
+.success-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text-dark);
+    margin-bottom: 8px;
+}
+
+.success-subtitle {
+    font-size: 16px;
+    color: var(--text-medium);
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+/* Order Info Card */
+.order-info-card {
+    background: var(--bg-white);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 20px rgba(74, 36, 119, 0.06);
+}
+
+.order-info-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-dark);
+    margin-bottom: 16px;
+}
+
+.order-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+}
+
+.order-info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.order-info-label {
+    font-size: 13px;
+    color: var(--text-light);
+}
+
+.order-info-value {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-dark);
+}
+
+.order-total {
+    color: var(--primary-dark);
+    font-size: 18px;
+}
+
+/* Action Buttons */
+.success-actions {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 48px;
+    flex-wrap: wrap;
+}
+
+.btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 28px;
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.2s;
+}
+
+.btn-primary:hover {
+    background: var(--primary-dark);
+    color: #fff;
+    text-decoration: none;
+}
+
+.btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 28px;
+    background: var(--bg-white);
+    color: var(--text-dark);
+    border: 2px solid var(--primary);
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.2s;
+}
+
+.btn-secondary:hover {
+    background: var(--primary-pale);
+    color: var(--text-dark);
+    text-decoration: none;
+}
+
+/* Suggested Products */
+.suggested-products {
+    background: var(--bg-white);
+    border-radius: 16px;
+    padding: 32px;
+    box-shadow: 0 4px 20px rgba(74, 36, 119, 0.06);
+}
+
+.suggested-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-dark);
+    margin-bottom: 24px;
+    text-align: center;
+}
+
+.suggested-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 20px;
+}
+
+.suggested-product-card {
+    background: var(--bg-white);
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    overflow: hidden;
+    transition: box-shadow 0.2s;
+}
+
+.suggested-product-card:hover {
+    box-shadow: 0 8px 24px rgba(74, 36, 119, 0.12);
+}
+
+.suggested-product-image {
+    width: 100%;
+    aspect-ratio: 1;
+    background: #f8f9fa;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.suggested-product-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.suggested-product-info {
+    padding: 14px;
+}
+
+.product-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-dark);
+    margin-bottom: 8px;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    height: 36px;
+}
+
+.product-price-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.product-price {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--primary-dark);
+}
+
+.cod-add-to-cart-btn {
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
+    border-radius: 8px;
+    border: none;
+    background: var(--primary);
+    color: #fff;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease;
+    padding: 0 8px;
+}
+
+.cod-add-to-cart-btn:hover {
+    background: var(--primary-dark);
+}
+
+.loading,
+.no-products {
+    text-align: center;
+    color: var(--text-light);
+    padding: 40px;
+}
+
+@media (max-width: 1200px) {
+    .suggested-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+@media (max-width: 992px) {
+    .suggested-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .success-banner {
+        padding: 32px 16px;
+    }
+
+    .success-title {
+        font-size: 22px;
+    }
+
+    .order-info-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .success-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .btn-primary,
+    .btn-secondary {
+        justify-content: center;
+    }
+
+    .suggested-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+    }
+
+    .suggested-products {
+        padding: 20px;
+    }
+
+    .product-name {
+        font-size: 12px;
+        height: 34px;
+    }
+
+    .product-price {
+        font-size: 14px;
+    }
+}

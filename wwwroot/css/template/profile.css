@@ -1,0 +1,995 @@
+/* ══════════════════════════════════════
+   PROFILE PAGES — Shopee-style
+   Primary: #4a2477
+   Used by: ProfileEditPage
+ ══════════════════════════════════════ */
+
+.profile-page {
+  padding: 2rem 0 4rem;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* — Main Card — */
+.profile-card.profile-shopee {
+  background: #fff;
+  border-radius: 18px;
+  border: 1px solid rgba(74, 36, 119, 0.1);
+  box-shadow:
+    0 1px 3px rgba(15, 23, 42, 0.06),
+    0 4px 20px rgba(74, 36, 119, 0.08);
+  overflow: hidden;
+}
+
+/* — Top bar: title row + action buttons — */
+.profile-shopee__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+}
+
+.profile-shopee__titles {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-shopee__h1 {
+  font-size: 1.2rem;
+  font-weight: 900;
+  color: #0f172a;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.profile-shopee__sub {
+  margin: 0.25rem 0 0;
+  font-size: 0.82rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.profile-shopee__actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* — Buttons — */
+.profile-shopee-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 800;
+  white-space: nowrap;
+  transition: all 0.18s ease;
+}
+
+.profile-shopee-btn--primary {
+  background: linear-gradient(135deg, #4a2477, #6b3fa0);
+  color: #fff;
+  border-color: #4a2477;
+  box-shadow: 0 3px 10px rgba(74, 36, 119, 0.28);
+}
+
+.profile-shopee-btn--primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #371860, #4a2477);
+  box-shadow: 0 5px 16px rgba(74, 36, 119, 0.4);
+  transform: translateY(-1px);
+}
+
+.profile-shopee-btn--secondary {
+  background: rgba(74, 36, 119, 0.07);
+  color: #4a2477;
+  border-color: rgba(74, 36, 119, 0.25);
+}
+
+.profile-shopee-btn--secondary:hover:not(:disabled) {
+  background: rgba(74, 36, 119, 0.14);
+  border-color: #4a2477;
+  transform: translateY(-1px);
+}
+
+.profile-shopee-btn--ghost {
+  background: transparent;
+  color: #64748b;
+  border-color: rgba(148, 163, 184, 0.35);
+}
+
+.profile-shopee-btn--ghost:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #334155;
+}
+
+.profile-shopee-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* — Divider — */
+.profile-shopee__rule {
+  border: none;
+  border-top: 1px solid #f1f0f7;
+  margin: 0;
+}
+
+/* — Body: left info + right aside — */
+.profile-shopee__body {
+  display: flex;
+  gap: 0;
+  align-items: flex-start;
+}
+
+/* — Info rows (left main column) — */
+.profile-shopee__main {
+  flex: 1;
+  min-width: 0;
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.profile-shopee__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid #f8f8fc;
+}
+
+.profile-shopee__row:last-child {
+  border-bottom: none;
+}
+
+.profile-shopee__row--address {
+  align-items: flex-start;
+}
+
+.profile-shopee__label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+  min-width: 120px;
+}
+
+.profile-shopee__value {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #334155;
+  text-align: right;
+  word-break: break-word;
+}
+
+.profile-shopee__value--multiline {
+  text-align: right;
+  line-height: 1.5;
+}
+
+.profile-shopee__valueWrap {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  justify-content: flex-end;
+}
+
+.profile-shopee__link {
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #4a2477;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.profile-shopee__link:hover {
+  background: rgba(74, 36, 119, 0.08);
+  color: #371860;
+}
+
+/* — Right aside (avatar / hint card) — */
+.profile-shopee__aside {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 1.5rem 1.5rem 1.5rem 1rem;
+  border-left: 1px solid #f1f0f7;
+  background: #fafafa;
+  min-width: 160px;
+}
+
+.profile-shopee__avatarRing {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 3px solid #4a2477;
+  box-shadow: 0 4px 14px rgba(74, 36, 119, 0.25);
+  background: linear-gradient(135deg, #f3f0ff, #ede9fe);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.profile-shopee__avatarImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-shopee__avatarFallback {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  font-size: 2rem;
+  font-weight: 900;
+  color: #4a2477;
+}
+
+.profile-shopee__choosePhoto {
+  border: none;
+  cursor: pointer;
+  padding: 0.4rem 0.85rem;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(135deg, #4a2477, #6b3fa0);
+  transition: all 0.18s ease;
+  box-shadow: 0 2px 8px rgba(74, 36, 119, 0.25);
+}
+
+.profile-shopee__choosePhoto:hover:not(:disabled) {
+  background: linear-gradient(135deg, #371860, #4a2477);
+  transform: translateY(-1px);
+}
+
+.profile-shopee__choosePhoto:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.profile-shopee__photoHint {
+  margin: 0;
+  font-size: 0.7rem;
+  color: #94a3b8;
+  text-align: center;
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+/* — Edit form layout — */
+.profile-shopee__body--edit {
+  flex-direction: column;
+}
+
+.profile-shopee__main--form {
+  padding: 1.25rem 1.5rem;
+  gap: 0;
+}
+
+.profile-shopee__fieldRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #f8f8fc;
+}
+
+.profile-shopee__fieldRow:last-child {
+  border-bottom: none;
+}
+
+.profile-shopee__fieldRow--address {
+  align-items: flex-start;
+}
+
+.profile-shopee__fieldRow--split {
+  align-items: center;
+}
+
+.profile-shopee__input {
+  flex: 1;
+  border: none;
+  border-bottom: 1.5px solid #e2e8f0;
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #1e293b;
+  padding: 0.2rem 0;
+  outline: none;
+  transition: border-color 0.2s;
+  text-align: right;
+}
+
+.profile-shopee__input:focus {
+  border-bottom-color: #4a2477;
+}
+
+.profile-shopee__input:disabled {
+  color: #94a3b8;
+  border-bottom-color: #f1f0f7;
+  cursor: not-allowed;
+}
+
+.profile-shopee__input::placeholder {
+  color: #cbd5e1;
+  font-weight: 500;
+}
+
+.profile-shopee__dateWrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.profile-shopee__dateBtn {
+  border: none;
+  cursor: pointer;
+  padding: 0.3rem 0.65rem;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #4a2477;
+  background: rgba(74, 36, 119, 0.08);
+  transition: all 0.18s ease;
+  flex-shrink: 0;
+}
+
+.profile-shopee__dateBtn:hover:not(:disabled) {
+  background: rgba(74, 36, 119, 0.16);
+  transform: translateY(-1px);
+}
+
+.profile-shopee__dateBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* — Edit aside (hint card) — */
+.profile-shopee__aside--edit {
+  border-left: none;
+  border-top: 1px solid #f1f0f7;
+  background: linear-gradient(135deg, rgba(74, 36, 119, 0.03), rgba(74, 36, 119, 0.01));
+  padding: 1rem 1.5rem;
+  flex-direction: row;
+  justify-content: flex-start;
+}
+
+.profile-shopee__hintCard {
+  background: rgba(74, 36, 119, 0.06);
+  border: 1px solid rgba(74, 36, 119, 0.15);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  max-width: 380px;
+}
+
+.profile-shopee__hintCard strong {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: #4a2477;
+  margin-bottom: 0.3rem;
+}
+
+.profile-shopee__hintCard p {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+/* — Error message — */
+.profile-shopee__error {
+  margin: 0 1.5rem 0;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  border: 1px solid rgba(220, 38, 38, 0.3);
+  background: #fff5f5;
+  color: #dc2626;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+/* — Form footer (save / cancel) — */
+.profile-shopee__formFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  padding: 1rem 1.5rem 1.25rem;
+  border-top: 1px solid #f1f0f7;
+  background: #fafafa;
+}
+
+/* — Responsive — */
+@media (max-width: 680px) {
+  .profile-shopee__top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .profile-shopee__actions {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .profile-shopee__body {
+    flex-direction: column-reverse;
+  }
+
+  .profile-shopee__aside {
+    border-left: none;
+    border-bottom: 1px solid #f1f0f7;
+    padding: 1rem 1.5rem;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .profile-shopee__aside--edit {
+    flex-direction: column;
+  }
+
+  .profile-shopee__fieldRow,
+  .profile-shopee__row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.3rem;
+  }
+
+  .profile-shopee__value,
+  .profile-shopee__valueWrap {
+    text-align: left;
+    justify-content: flex-start;
+  }
+
+  .profile-shopee__input {
+    text-align: left;
+    width: 100%;
+  }
+
+  .profile-shopee__dateWrap {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+/* — Hidden native date input (used by picker button) — */
+.profile-dateNative {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 1px;
+  height: 1px;
+}
+
+.profile-avatarInput {
+  display: none;
+}
+
+/* ══════════════════════════════════════
+   AVATAR CROPPER (existing, keep)
+ ══════════════════════════════════════ */
+.avatarCropper {
+  position: fixed;
+  inset: 0;
+  z-index: 6000;
+}
+
+.avatarCropper__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(6px);
+}
+
+.avatarCropper__panel {
+  position: relative;
+  width: min(560px, calc(100vw - 2rem));
+  margin: 6vh auto 0;
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid rgba(74, 36, 119, 0.15);
+  border-radius: 18px;
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.3);
+  overflow: hidden;
+}
+
+.avatarCropper__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.2rem 1.35rem 0.9rem;
+}
+
+.avatarCropper__title {
+  font-weight: 800;
+  font-size: 1.2rem;
+  color: #0f172a;
+}
+
+.avatarCropper__sub {
+  margin-top: 0.2rem;
+  font-size: 0.82rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.avatarCropper__close {
+  border: none;
+  background: transparent;
+  font-size: 1.7rem;
+  line-height: 1;
+  cursor: pointer;
+  color: #64748b;
+  padding: 0.2rem 0.4rem;
+  border-radius: 10px;
+  transition: background 0.15s;
+}
+
+.avatarCropper__close:hover {
+  background: rgba(74, 36, 119, 0.08);
+  color: #4a2477;
+}
+
+.avatarCropper__stage {
+  padding: 1rem 1.35rem 0.75rem;
+  display: grid;
+  place-items: center;
+  touch-action: none;
+  cursor: grab;
+}
+
+.avatarCropper__stage:active {
+  cursor: grabbing;
+}
+
+.avatarCropper__circle {
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  overflow: hidden;
+  position: relative;
+  border: 4px solid #fff;
+  box-shadow: 0 0 0 3px rgba(74, 36, 119, 0.2), 0 8px 24px rgba(74, 36, 119, 0.15);
+  user-select: none;
+}
+
+.avatarCropper__img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  will-change: transform;
+  user-select: none;
+  pointer-events: none;
+}
+
+.avatarCropper__controls {
+  padding: 0.1rem 1.35rem 1rem;
+}
+
+.avatarCropper__label {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 700;
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.avatarCropper__label input[type="range"] {
+  width: 100%;
+  accent-color: #4a2477;
+}
+
+.avatarCropper__actions {
+  padding: 0 1.35rem 1.2rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+@media (max-width: 420px) {
+  .avatarCropper__circle {
+    width: 180px;
+    height: 180px;
+  }
+}
+
+/* ══════════════════════════════════════
+   PET INFO PAGE — Shopee-style
+   Primary: #4a2477
+ ══════════════════════════════════════ */
+
+/* — Form card — */
+.pet-page__formCard {
+  padding: 1.25rem 1.5rem;
+}
+
+.pet-page__formLayout {
+  display: flex;
+  gap: 1.25rem;
+  align-items: flex-start;
+}
+
+.pet-page__formFields {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* — Field rows (label + input inline) — */
+.pet-page__fieldRow {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid #f1f0f7;
+}
+
+.pet-page__fieldRow:first-of-type {
+  padding-top: 0;
+}
+
+.pet-page__fieldRow:last-of-type {
+  border-bottom: none;
+}
+
+.pet-page__fieldRow--span {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.pet-page__label {
+  font-size: 0.82rem;
+  color: #94a3b8;
+  flex-shrink: 0;
+  min-width: 130px;
+}
+
+.pet-page__input,
+.pet-page__select {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.88rem;
+  color: #1e293b;
+  padding: 0.2rem 0;
+  outline: none;
+  transition: border-color 0.2s;
+  font-weight: 400;
+  border-radius: 0;
+  width: 100%;
+}
+
+.pet-page__input:focus,
+.pet-page__select:focus {
+  border-bottom-color: #4a2477;
+}
+
+.pet-page__input::placeholder {
+  color: #cbd5e1;
+}
+
+.pet-page__input--short {
+  max-width: 160px;
+}
+
+.pet-page__input--url {
+  flex: 1;
+  min-width: 0;
+}
+
+.pet-page__select {
+  cursor: pointer;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0 center;
+  padding-right: 1.2rem;
+}
+
+.pet-page__select:disabled {
+  color: #cbd5e1;
+  border-bottom-color: #f1f0f7;
+  cursor: not-allowed;
+}
+
+.pet-page__imageField {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.pet-page__uploadBtn {
+  flex-shrink: 0;
+  cursor: pointer;
+  padding: 0.4rem 0.85rem;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.8rem;
+  color: #fff;
+  background: linear-gradient(135deg, #4a2477, #6b3fa0);
+  box-shadow: 0 2px 8px rgba(74, 36, 119, 0.25);
+  transition: all 0.18s ease;
+  display: inline-block;
+  font-weight: 400;
+}
+
+.pet-page__uploadBtn:hover {
+  background: linear-gradient(135deg, #371860, #4a2477);
+  transform: translateY(-1px);
+}
+
+/* — Pet page aside (same style as ProfileEditPage aside) — */
+.profile-shopee__aside--pet {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 1.5rem 1.5rem 1.5rem 1rem;
+  border-left: 1px solid #f1f0f7;
+  background: #fafafa;
+  min-width: 160px;
+  flex-shrink: 0;
+}
+
+/* — Notices (error / success) — */
+.pet-page__notice {
+  margin: 0.75rem 1.5rem;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 400;
+}
+
+.pet-page__notice--error {
+  background: #fff5f5;
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  color: #dc2626;
+}
+
+.pet-page__notice--success {
+  background: #f0fdf4;
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  color: #16a34a;
+}
+
+/* — Form footer — */
+.pet-page__formFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+
+/* — Loading — */
+.pet-page__loading {
+  padding: 2rem 1.5rem;
+  text-align: center;
+  color: #64748b;
+  font-size: 0.88rem;
+}
+
+/* — List section — */
+.pet-page__listSection {
+  border-top: 1px solid #f1f0f7;
+  padding: 0 1.5rem 1.5rem;
+}
+
+.pet-page__listTitle {
+  padding: 1rem 0 0.75rem;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.pet-page__empty {
+  padding: 1rem 0;
+  color: #94a3b8;
+  font-size: 0.88rem;
+  text-align: center;
+}
+
+.pet-page__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.pet-page__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 0.85rem;
+  border-radius: 12px;
+  border: 1px solid #f1f0f7;
+  background: #fafafa;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.pet-page__item:hover {
+  border-color: rgba(74, 36, 119, 0.2);
+  box-shadow: 0 2px 12px rgba(74, 36, 119, 0.06);
+}
+
+.pet-page__itemImg {
+  width: 80px;
+  height: 80px;
+  border-radius: 10px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: #fff;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.pet-page__itemImg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pet-page__itemImgEmpty {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  font-size: 0.7rem;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.pet-page__itemInfo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.pet-page__itemName {
+  font-size: 0.92rem;
+  font-weight: 400;
+  color: #1e293b;
+}
+
+.pet-page__itemDetail {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.pet-page__itemMeta {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  margin-top: 0.1rem;
+}
+
+.pet-page__itemActions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+
+/* — Danger button — */
+.profile-shopee-btn--danger {
+  background: rgba(220, 38, 38, 0.07);
+  color: #dc2626;
+  border-color: rgba(220, 38, 38, 0.2);
+  font-weight: 400;
+}
+
+.profile-shopee-btn--danger:hover:not(:disabled) {
+  background: rgba(220, 38, 38, 0.14);
+  border-color: #dc2626;
+  transform: translateY(-1px);
+}
+
+/* — Responsive — */
+@media (max-width: 720px) {
+  .pet-page__formLayout {
+    flex-direction: column-reverse;
+  }
+
+  .profile-shopee__aside--pet {
+    flex-direction: row;
+    border-left: none;
+    border-top: 1px solid #f1f0f7;
+    padding: 1rem 1.5rem;
+    justify-content: flex-start;
+  }
+
+  .pet-page__fieldRow {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.3rem;
+  }
+
+  .pet-page__fieldRow--span {
+    flex-direction: column;
+  }
+
+  .pet-page__input,
+  .pet-page__select {
+    width: 100%;
+  }
+
+  .pet-page__input--short {
+    max-width: 100%;
+  }
+
+  .pet-page__imageField {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .pet-page__item {
+    flex-direction: column;
+  }
+
+  .pet-page__itemImg {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+  }
+}
+
+/* Typography normalization: match reference (not bold) */
+.profile-page,
+.profile-page * {
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.profile-shopee__h1,
+.profile-shopee__sub,
+.profile-shopee__label,
+.profile-shopee__value,
+.profile-shopee__link,
+.profile-shopee__input,
+.profile-shopee-btn,
+.profile-shopee__choosePhoto,
+.profile-shopee__photoHint,
+.profile-shopee__error,
+.avatarCropper__title,
+.avatarCropper__sub,
+.avatarCropper__label {
+  font-weight: 400;
+}
+
+.profile-shopee__label {
+  text-transform: none;
+  letter-spacing: 0;
+}

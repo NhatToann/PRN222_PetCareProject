@@ -1,0 +1,17 @@
+﻿@inject NavigationManager Navigation
+
+<PageTitle>Redirecting</PageTitle>
+
+<section class="section-block not-found-page">
+    <p>Redirecting to home...</p>
+</section>
+
+@code {
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            Navigation.NavigateTo("/", replace: true);
+        }
+    }
+}

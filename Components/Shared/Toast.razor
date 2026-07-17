@@ -1,0 +1,9 @@
+@if (Show)
+{
+    <div class="toast-notification">@Message</div>
+}
+
+@code {
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public string Message { get; set; } = string.Empty;
+}

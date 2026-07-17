@@ -1,0 +1,233 @@
+@page "/services"
+@inject PetShop.Interfaces.IPetServiceClient PetServiceClient
+@inject PetShop.Services.UserSessionService UserSession
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@implements IDisposable
+
+<PageTitle>Dịch vụ chăm sóc – Pet Toy Shop</PageTitle>
+
+<div class="home-page service-page">
+    <TopBar />
+    <Header />
+    <Navigation />
+
+    <main class="products-search-page">
+        <div class="container products-shell">
+            <div class="products-intro">
+                <div>
+                    <h1>Dịch vụ chăm sóc</h1>
+                    <p>Spa, tắm và chăm sóc chuyên nghiệp cho thú cưng của bạn</p>
+                </div>
+                <div class="products-intro-actions">
+                    @if (!isLoading && error is null)
+                    {
+                        <div class="products-badge">@FilteredServices.Count dịch vụ</div>
+                    }
+                    @if (IsDoctor)
+                    {
+                        <button type="button" class="products-create-btn" @onclick="OpenAddModal">Thêm dịch vụ</button>
+                    }
+                </div>
+            </div>
+
+            <section class="service-section service-section--under-intro">
+                @{
+                    var loading = isLoading;
+                    var errMsg = error;
+                    var empty = !loading && errMsg is null && FilteredServices.Count == 0;
+                }
+                @if (loading)
+                {
+                    <div class="service-loading">Đang tải dịch vụ...</div>
+                }
+                else if (errMsg is not null)
+                {
+                    <div class='service-error' style='margin-bottom: 24px;'>@errMsg</div>
+                }
+                else
+                {
+                    <div class="service-grid">
+                        @if (empty)
+                        {
+                            <div class="service-empty">Chưa có dịch vụ nào được cung cấp.</div>
+                        }
+                        @foreach (var card in Cards)
+                        {
+                            <article class="service-grid-card"
+                                     role="button"
+                                     tabindex="0"
+                                     @onclick="() => NavigateToDetail(card.ServiceId)"
+                                     @onkeydown="(e) => HandleEnter(e, card.ServiceId)">
+                                <div class="service-grid-card__media">
+                                    <ServiceImageCarousel Images="@card.Images" Alt="@card.Name" />
+                                </div>
+                                <div class="service-grid-card__content">
+                                    <div class="service-grid-card__header">
+                                        <h3>@card.Name</h3>
+                                        @if (card.RatingValue is double rv)
+                                        {
+                                            <div class="service-grid-card__rating">
+                                                <span class="service-grid-card__stars">@RenderStars(rv)</span>
+                                                <span>@FormatRating(rv)</span>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span class="service-grid-card__rating">Chưa có đánh giá</span>
+                                        }
+                                    </div>
+                                    <p class="service-grid-card__desc">@Truncate(card.Description, 120)</p>
+                                    <div class="service-grid-card__footer">
+                                        <span>Thời gian: @(card.Duration > 0 ? $"{card.Duration} phút" : "Liên hệ")</span>
+                                        <button type="button"
+                                                class="service-grid-card__price"
+                                                style="background: #4a2477;"
+                                                @onclick:stopPropagation="true"
+                                                @onclick="() => AddToCart(card.ServiceId)">
+                                            @(card.Price > 0 ? card.Price.ToString("N0", new System.Globalization.CultureInfo("vi-VN")) + "₫" : "Liên hệ")
+                                        </button>
+                                    </div>
+                                </div>
+                            </article>
+                        }
+                    </div>
+                }
+            </section>
+        </div>
+    </main>
+
+    <Footer />
+</div>
+
+@code {
+    private const string ServiceDefaultImage = "/images/placeholder.jpg";
+
+    private readonly Dictionary<string, string[]> _serviceImageMap = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["spa cao cấp"] = new[] { "/images/spa-caocap1.jpg", "/images/spa-caocap2.jpg", "/images/spa-caocap3.jpg" },
+        ["tắm + vệ sinh cơ bản"] = new[] { "/images/bath1.png", "/images/bath2.jpg", "/images/bath3.jpg" },
+        ["cắt tỉa lông chuyên nghiệp"] = new[] { "/images/cut1.jpg", "/images/cut2.jpg", "/images/cut3.jpg" },
+        ["vệ sinh răng miệng"] = new[] { "/images/teeth1.jpg", "/images/teeth2.jpg", "/images/teeth3.jpg" },
+    };
+
+    private List<PetShop.Models.PetServiceDto> services = new();
+    private bool isLoading = true;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            try { await UserSession.LoadAsync(); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Services.razor] OnInitializedAsync UserSession.LoadAsync threw: {ex.GetType().Name}"); }
+            var result = await PetServiceClient.GetAllAsync();
+            if (result.IsSuccess && result.Data is not null)
+            {
+                services = result.Data.ToList();
+                error = null;
+            }
+            else
+            {
+                error = result.Error ?? "Không tải được danh sách dịch vụ.";
+            }
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // UserSession already loaded in OnInitializedAsync; no duplicate call needed here.
+        // This method is intentionally a no-op to preserve the lifecycle hook.
+        await Task.CompletedTask;
+    }
+
+    private bool IsDoctor
+    {
+        get
+        {
+            var raw = UserSession.CurrentUser?.Role ?? string.Empty;
+            var normalized = raw.Trim().ToLowerInvariant()
+                .Normalize(System.Text.NormalizationForm.FormD)
+                .Replace("đ", "d");
+            var sb = new System.Text.StringBuilder(normalized.Length);
+            foreach (var ch in normalized)
+            {
+                if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(ch) != System.Globalization.UnicodeCategory.NonSpacingMark)
+                    sb.Append(ch);
+            }
+            var stripped = sb.ToString();
+            return stripped == "doctor" || stripped == "bac si" || stripped == "bacsi";
+        }
+    }
+
+    private IReadOnlyList<PetShop.Models.PetServiceDto> FilteredServices => services;
+
+    private record CardModel(int ServiceId, string Name, string Description, decimal Price, int Duration, double? RatingValue, string[] Images);
+
+    private List<CardModel> Cards => services.Select(s =>
+    {
+        var name = s.Name ?? "Dịch vụ chăm sóc";
+        var images = _serviceImageMap.TryGetValue(name, out var arr)
+            ? arr
+            : new[] { ServiceDefaultImage };
+        return new CardModel(
+            s.ServiceId,
+            name,
+            string.IsNullOrWhiteSpace(s.Description) ? "Dịch vụ spa chuyên nghiệp cho thú cưng" : s.Description!,
+            s.Price,
+            s.Duration,
+            null,
+            images);
+    }).ToList();
+
+    private void NavigateToDetail(int serviceId) => Navigation.NavigateTo($"/services/{serviceId}");
+
+    private void HandleEnter(KeyboardEventArgs e, int serviceId)
+    {
+        if (e.Key == "Enter" || e.Key == " ") NavigateToDetail(serviceId);
+    }
+
+    private async Task AddToCart(int serviceId)
+    {
+        await JS.InvokeVoidAsync("spaCart.add", serviceId);
+        Navigation.NavigateTo($"/spa-cart?serviceId={serviceId}");
+    }
+
+    private void OpenAddModal()
+    {
+        // Doctor "Thêm dịch vụ" modal porting is deferred — out of Phase 4 scope
+        // (no doctor-only page exists yet in Blazor). Keep UI affordance visible
+        // so the React parity is preserved; click is a no-op until Phase 7.
+    }
+
+    private static string RenderStars(double rating)
+    {
+        var full = (int)Math.Floor(rating);
+        var hasHalf = rating - full >= 0.5;
+        var s = new System.Text.StringBuilder(5);
+        for (var i = 0; i < 5; i++) s.Append(i < full ? "★" : (i == full && hasHalf ? "★" : "☆"));
+        return s.ToString();
+    }
+
+    private static string FormatRating(double r)
+        => r % 1 == 0 ? r.ToString("0") : r.ToString("0.0");
+
+    private static string Truncate(string? text, int max)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+        return text.Length <= max ? text : text.Substring(0, max).TrimEnd() + "...";
+    }
+
+    public void Dispose() { }
+}

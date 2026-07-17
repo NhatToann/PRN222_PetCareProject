@@ -1,0 +1,197 @@
+@page "/login"
+@layout PetShop_PRN222.Components.Layout.EmptyLayout
+@inject PetShop.Interfaces.IAuthClient AuthClient
+@inject PetShop.Services.UserSessionService UserSession
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Đăng nhập – Pet Toy Shop</PageTitle>
+
+<div class="auth-page">
+
+    <!-- Brand logo top-right -->
+    <a href="/" class="brand-logo brand-logo--auth logo-home" aria-label="Pet Toy Shop">
+        <div class="brand-logo__img">
+            <img src="https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?w=160&q=80" alt="" width="56" height="56" decoding="async" />
+        </div>
+        <span class="brand-logo__text">Pet Toy Shop</span>
+    </a>
+
+    <!-- LEFT hero panel -->
+    <div class="auth-left">
+        <h2>Chào mừng trở lại</h2>
+        <p>Vui lòng đăng nhập vào tài khoản của bạn</p>
+    </div>
+
+    <!-- RIGHT form panel -->
+    <div class="auth-right">
+        <h3>ĐĂNG NHẬP</h3>
+
+        <form @onsubmit="HandleLoginAsync" @onsubmit:preventDefault>
+            <input type="email"
+                   name="email"
+                   id="login-email"
+                   placeholder="Email"
+                   value="@email"
+                   @oninput="e => email = e.Value?.ToString() ?? string.Empty"
+                   required
+                   disabled="@isBusy" />
+
+            <input type="password"
+                   name="password"
+                   id="login-password"
+                   placeholder="Mật khẩu"
+                   value="@password"
+                   @oninput="e => password = e.Value?.ToString() ?? string.Empty"
+                   required
+                   disabled="@isBusy" />
+
+            <a href="/forgot-password" class="forgot">Quên mật khẩu?</a>
+
+            <button type="submit" disabled="@isBusy">
+                @(loginLoading ? "Đang đăng nhập..." : "Đăng nhập")
+            </button>
+        </form>
+
+        @if (!string.IsNullOrWhiteSpace(error))
+        {
+            <div class="auth-error">@error</div>
+        }
+
+        <!-- Google Login -->
+        <button type="button" id="google-login-btn"
+                class="google-login-btn"
+                @onclick="HandleGoogleLoginAsync"
+                disabled="@(isBusy || !googleReady)">
+            <img src="https://developers.google.com/identity/images/g-logo.png" alt="google" />
+            <span>@(loginLoading ? "Đang đăng nhập..." : "Đăng nhập với Google")</span>
+        </button>
+
+        <p>
+            Chưa có tài khoản? <a href="/register">Đăng ký</a>
+        </p>
+    </div>
+</div>
+
+@code {
+    private string email = string.Empty;
+    private string password = string.Empty;
+    private bool loginLoading;
+    private bool googleReady;
+    private string? googleClientId;
+    private string? error;
+
+    private bool isBusy => loginLoading;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // Already logged in → redirect
+        try { await UserSession.LoadAsync(); }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Login.razor] OnAfterRenderAsync LoadAsync threw: {ex.GetType().Name}"); }
+        if (UserSession.IsAuthenticated)
+        {
+            Navigation.NavigateTo(UserSession.CurrentUser!.Role == "staff" ? "/system" : "/", replace: true);
+            return;
+        }
+
+        // Fetch Google client ID and initialize GSI
+        var result = await AuthClient.GetGoogleClientIdAsync();
+        if (result.IsSuccess && !string.IsNullOrWhiteSpace(result.Data?.Message))
+        {
+            googleClientId = result.Data!.Message;
+            await InitGoogleAsync(googleClientId);
+        }
+    }
+
+    private async Task InitGoogleAsync(string clientId)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("blazorAuth.initGoogle", clientId, DotNetObjectReference.Create(this));
+            googleReady = true;
+            StateHasChanged();
+        }
+        catch
+        {
+            // GSI may not be available (network). Not fatal.
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnGoogleCredential(string idToken)
+    {
+        // Prevent double-invocation if Google fires the JS callback twice for
+        // any reason (focus changes, popup lifecycle edge cases). The backend
+        // does not have an idempotency token for the Google flow.
+        if (loginLoading) return;
+
+        error = null;
+        loginLoading = true;
+        StateHasChanged();
+
+        var result = await AuthClient.GoogleLoginAsync(new PetShop.Models.GoogleLoginRequestDto(idToken, null));
+
+        if (!result.IsSuccess || result.Data is null)
+        {
+            error = result.Error ?? "Đăng nhập Google thất bại.";
+            loginLoading = false;
+            StateHasChanged();
+            return;
+        }
+
+        await UserSession.SignInAsync(result.Data);
+        // No need to set loginLoading=false here — navigation tears down the component.
+        Navigation.NavigateTo(result.Data.Role.Equals("staff", StringComparison.OrdinalIgnoreCase) ? "/system" : "/", replace: true);
+    }
+
+    private async Task HandleLoginAsync()
+    {
+        // Single-click double-submit guard. The backend has no idempotency token yet,
+        // so this client-side guard is critical for stable behaviour.
+        if (loginLoading) return;
+
+        error = null;
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+        {
+            error = "Vui lòng nhập Email và mật khẩu.";
+            return;
+        }
+
+        loginLoading = true;
+        StateHasChanged();
+        try
+        {
+            var result = await AuthClient.LoginAsync(new PetShop.Models.LoginRequestDto(email.Trim(), password));
+
+            if (!result.IsSuccess || result.Data is null)
+            {
+                error = result.Error ?? "Đăng nhập thất bại.";
+                return;
+            }
+
+            await UserSession.SignInAsync(result.Data);
+            Navigation.NavigateTo(result.Data.Role.Equals("staff", StringComparison.OrdinalIgnoreCase) ? "/system" : "/", replace: true);
+        }
+        finally
+        {
+            loginLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleGoogleLoginAsync()
+    {
+        if (!googleReady) return;
+        error = null;
+        try
+        {
+            await JS.InvokeVoidAsync("blazorAuth.promptGoogle");
+        }
+        catch
+        {
+            error = "Google Login chưa sẵn sàng. Vui lòng thử lại.";
+        }
+    }
+}

@@ -1,0 +1,305 @@
+@page "/register"
+@layout PetShop_PRN222.Components.Layout.EmptyLayout
+@inject PetShop.Interfaces.IAuthClient AuthClient
+@inject NavigationManager Navigation
+
+<PageTitle>Đăng ký – Pet Toy Shop</PageTitle>
+
+<div class="auth-page">
+
+    <!-- Brand logo top-right -->
+    <a href="/" class="brand-logo brand-logo--auth logo-home" aria-label="Pet Toy Shop">
+        <div class="brand-logo__img">
+            <img src="https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?w=160&q=80" alt="" width="56" height="56" decoding="async" />
+        </div>
+        <span class="brand-logo__text">Pet Toy Shop</span>
+    </a>
+
+    <!-- LEFT hero panel -->
+    <div class="auth-left">
+        <h2>Tạo tài khoản</h2>
+        <p>Tham gia cùng chúng tôi ngay hôm nay</p>
+    </div>
+
+    <!-- RIGHT form panel -->
+    <div class="auth-right">
+        <h3>@(step == "register" ? "ĐĂNG KÝ" : "XÁC THỰC OTP")</h3>
+
+        @if (step == "register")
+        {
+            <form @onsubmit="HandleRegisterAsync" @onsubmit:preventDefault>
+                <input name="name"
+                       id="reg-name"
+                       placeholder="Họ và tên"
+                       value="@name"
+                       @oninput="e => name = e.Value?.ToString() ?? string.Empty"
+                       required
+                       disabled="@isBusy" />
+
+                <input name="email"
+                       id="reg-email"
+                       type="email"
+                       placeholder="Email"
+                       value="@regEmail"
+                       @oninput="e => regEmail = e.Value?.ToString() ?? string.Empty"
+                       required
+                       disabled="@isBusy" />
+
+                <input name="phone"
+                       id="reg-phone"
+                       placeholder="Số điện thoại"
+                       value="@phone"
+                       @oninput="e => phone = e.Value?.ToString() ?? string.Empty"
+                       disabled="@isBusy" />
+
+                <input name="address"
+                       id="reg-address"
+                       placeholder="Địa chỉ"
+                       value="@address"
+                       @oninput="e => address = e.Value?.ToString() ?? string.Empty"
+                       disabled="@isBusy" />
+
+                <input name="password"
+                       id="reg-password"
+                       type="password"
+                       placeholder="Mật khẩu"
+                       value="@password"
+                       @oninput="e => password = e.Value?.ToString() ?? string.Empty"
+                       required
+                       disabled="@isBusy" />
+
+                <button type="submit" disabled="@isBusy">
+                    @(registerLoading ? "Đang đăng ký..." : "Đăng ký")
+                </button>
+
+                @if (!string.IsNullOrWhiteSpace(error))
+                {
+                    <p class="auth-error">@error</p>
+                }
+                @if (!string.IsNullOrWhiteSpace(success))
+                {
+                    <p class="auth-success">@success</p>
+                }
+            </form>
+        }
+        else
+        {
+            <!-- OTP verification step -->
+            <form @onsubmit="HandleVerifyOtpAsync" @onsubmit:preventDefault>
+                <input name="email"
+                       id="otp-email"
+                       type="email"
+                       placeholder="Email"
+                       value="@otpEmail"
+                       @oninput="e => otpEmail = e.Value?.ToString() ?? string.Empty"
+                       required
+                       disabled="@isBusy" />
+
+                <input name="otpCode"
+                       id="otp-code"
+                       placeholder="Nhập OTP"
+                       value="@otpCode"
+                       @oninput="e => otpCode = e.Value?.ToString() ?? string.Empty"
+                       required
+                       disabled="@isBusy" />
+
+                <button type="submit" disabled="@isBusy">
+                    @(otpLoading ? "Đang xác thực..." : "Xác thực OTP")
+                </button>
+
+                <button type="button"
+                        class="google-login-btn"
+                        @onclick="HandleResendOtpAsync"
+                        disabled="@(isBusy || resendCountdown > 0)">
+                    @if (resendLoading)
+                    {
+                        <span>Đang gửi lại OTP...</span>
+                    }
+                    else if (resendCountdown > 0)
+                    {
+                        <span>Gửi lại OTP (@(resendCountdown)s)</span>
+                    }
+                    else
+                    {
+                        <span>Gửi lại OTP</span>
+                    }
+                </button>
+
+                @if (!string.IsNullOrWhiteSpace(error))
+                {
+                    <p class="auth-error">@error</p>
+                }
+                @if (!string.IsNullOrWhiteSpace(success))
+                {
+                    <p class="auth-success">@success</p>
+                }
+
+                <button type="button"
+                        class="google-login-btn"
+                        @onclick="GoBackToRegister"
+                        disabled="@isBusy">
+                    Quay lại đăng ký
+                </button>
+            </form>
+        }
+
+        @if (step == "register")
+        {
+            <button type="button" class="google-login-btn" disabled="@isBusy">
+                <img src="https://developers.google.com/identity/images/g-logo.png" alt="google" />
+                <span>Đăng nhập với Google</span>
+            </button>
+
+            <p>Đã có tài khoản? <a href="/login">Đăng nhập</a></p>
+        }
+    </div>
+</div>
+
+@code {
+    private string step = "register";
+
+    // Registration form fields
+    private string name = string.Empty;
+    private string regEmail = string.Empty;
+    private string phone = string.Empty;
+    private string address = string.Empty;
+    private string password = string.Empty;
+
+    // OTP form fields
+    private string otpEmail = string.Empty;
+    private string otpCode = string.Empty;
+
+    // Loading states
+    private bool registerLoading;
+    private bool otpLoading;
+    private bool resendLoading;
+    private int resendCountdown;
+
+    private bool isBusy => registerLoading || otpLoading || resendLoading;
+
+    private string? error;
+    private string? success;
+
+    private System.Threading.Timer? countdownTimer;
+
+    private async Task HandleRegisterAsync()
+    {
+        error = null;
+        success = null;
+
+        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(regEmail) || string.IsNullOrWhiteSpace(password))
+        {
+            error = "Vui lòng nhập đầy đủ Họ và tên, Email, Mật khẩu.";
+            return;
+        }
+
+        registerLoading = true;
+        var result = await AuthClient.RegisterAsync(new PetShop.Models.RegisterRequestDto(
+            name.Trim(), regEmail.Trim(), password,
+            string.IsNullOrWhiteSpace(phone) ? null : phone.Trim(),
+            string.IsNullOrWhiteSpace(address) ? null : address.Trim()));
+        registerLoading = false;
+
+        if (!result.IsSuccess)
+        {
+            error = result.Error ?? "Đăng ký thất bại.";
+            return;
+        }
+
+        success = "Đã gửi OTP đến email. Vui lòng nhập OTP để kích hoạt tài khoản.";
+        otpEmail = regEmail.Trim();
+        otpCode = string.Empty;
+        StartResendCountdown(120);
+        step = "otp";
+    }
+
+    private async Task HandleVerifyOtpAsync()
+    {
+        error = null;
+        success = null;
+
+        if (string.IsNullOrWhiteSpace(otpEmail) || string.IsNullOrWhiteSpace(otpCode))
+        {
+            error = "Vui lòng nhập email và OTP.";
+            return;
+        }
+
+        otpLoading = true;
+        var result = await AuthClient.VerifyOtpAsync(new PetShop.Models.VerifyEmailOtpRequestDto(otpEmail.Trim(), otpCode.Trim()));
+        otpLoading = false;
+
+        if (!result.IsSuccess)
+        {
+            error = result.Error ?? "Xác thực OTP thất bại.";
+            return;
+        }
+
+        success = "Xác thực OTP thành công. Vui lòng đăng nhập.";
+        StopCountdown();
+
+        await Task.Delay(800);
+        Navigation.NavigateTo("/login");
+    }
+
+    private async Task HandleResendOtpAsync()
+    {
+        if (resendCountdown > 0 || resendLoading) return;
+
+        error = null;
+        success = null;
+
+        if (string.IsNullOrWhiteSpace(otpEmail))
+        {
+            error = "Vui lòng nhập email để gửi lại OTP.";
+            return;
+        }
+
+        resendLoading = true;
+        var result = await AuthClient.SendOtpAsync(new PetShop.Models.SendEmailOtpRequestDto(otpEmail.Trim()));
+        resendLoading = false;
+
+        if (!result.IsSuccess)
+        {
+            error = result.Error ?? "Gửi lại OTP thất bại.";
+            return;
+        }
+
+        success = "Đã gửi lại OTP đến email của bạn.";
+        StartResendCountdown(120);
+    }
+
+    private void GoBackToRegister()
+    {
+        StopCountdown();
+        resendCountdown = 0;
+        error = null;
+        success = null;
+        step = "register";
+    }
+
+    private void StartResendCountdown(int seconds)
+    {
+        resendCountdown = seconds;
+        StopCountdown();
+        countdownTimer = new System.Threading.Timer(_ =>
+        {
+            if (resendCountdown > 0)
+            {
+                resendCountdown--;
+                InvokeAsync(StateHasChanged);
+            }
+            else
+            {
+                StopCountdown();
+            }
+        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    private void StopCountdown()
+    {
+        countdownTimer?.Dispose();
+        countdownTimer = null;
+    }
+
+    public void Dispose() => StopCountdown();
+}
