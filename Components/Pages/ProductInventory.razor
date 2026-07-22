@@ -1,0 +1,136 @@
+﻿@page "/products/inventory"
+@layout PetShop_PRN222.Components.Layout.StaffWorkspaceLayout
+@rendermode InteractiveServer
+@using PetShop.Data
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceProvider ServiceProvider
+
+<PageTitle>Quản Lý Tồn Kho</PageTitle>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="fw-bold mb-1 text-dark">Quản Lý Tồn Kho</h2>
+    </div>
+</div>
+
+<div class="fox-card p-0 overflow-hidden shadow-sm border-0">
+    @if (inventoryList == null)
+    {
+        <div class="text-center py-5"><div class="spinner-border"></div></div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table fox-table table-hover align-middle mb-0 text-center">
+                <thead class="table-light">
+                    <tr>
+                        <th class="py-3 text-start ps-4">Sản Phẩm & SKU</th>
+                        <th>SL Tồn Kho</th>
+                        <th>Đã Bán</th>
+                        <th>Trạng Thái</th>
+                        <th class="pe-4">Thao Tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in inventoryList)
+                    {
+                        <tr>
+                            <td class="text-start ps-4 py-3 d-flex align-items-center gap-3">
+                                <img src="@item.ImageUrl" class="rounded-3 shadow-sm border" style="width: 50px; height: 50px; object-fit: cover;" />
+                                <div>
+                                    <div class="fw-bold text-dark fs-5">@item.Name</div>
+                                </div>
+                            </td>
+                            <td><h4 class="fw-bold mb-0 text-primary">@item.StockQuantity</h4></td>
+                            <td><h5 class="fw-bold mb-0 text-success">@item.SoldQuantity</h5></td>
+                            <td>
+                                @if (item.StockQuantity <= 0)
+                                {
+                                    <span class="badge bg-danger px-3 py-2 rounded-pill">Hết Hàng</span>
+                                }
+                                else
+                                {
+
+                                    <span class="badge bg-success px-3 py-2 rounded-pill">Còn Hàng</span>
+                                }
+                            </td>
+                            <td class="pe-4">
+                                <button class="btn btn-sm btn-outline-primary fw-bold rounded-pill px-3 shadow-sm" @onclick="() => OpenAdjustModal(item)">
+                                    <i class="fas fa-boxes me-1"></i> Nhập kho
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@if (selectedProduct != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.6);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 rounded-4 shadow-lg">
+                <div class="modal-header text-white p-4" style="background-color: #6c5ce7;">
+                    <h5 class="fw-bold mb-0">Nhập kho: @selectedProduct.Name</h5>
+                    <button class="btn-close btn-close-white" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <label class="fw-bold mb-2">Nhập thêm số lượng</label>
+                    <input type="number" class="form-control form-control-lg mb-3" @bind="addQuantity" />
+                </div>
+                <div class="modal-footer border-0 p-4 pt-0">
+                    <button class="btn btn-secondary px-4 fw-bold rounded-pill" @onclick="CloseModal">Hủy</button>
+                    <button class="btn btn-primary px-4 fw-bold rounded-pill shadow-sm" style="background-color: #6c5ce7; border:none;" @onclick="SaveStock">Lưu</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    public class InventoryItem { public int ProductId { get; set; } public string Name { get; set; } = ""; public string ImageUrl { get; set; } = ""; public int StockQuantity { get; set; } public int SoldQuantity { get; set; } }
+    private List<InventoryItem>? inventoryList;
+    private InventoryItem? selectedProduct;
+    private int addQuantity = 0;
+
+    protected override async Task OnInitializedAsync() { await LoadInventory(); }
+
+    private async Task LoadInventory()
+    {
+        using var scope = ServiceProvider.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ShopPetDatabaseContext>();
+        var products = await db.Products.AsNoTracking().Where(p => !p.IsDeleted).ToListAsync();
+
+        inventoryList = products.Select(p => new InventoryItem
+        {
+            ProductId = p.ProductId,
+            Name = p.Name,
+            StockQuantity = p.StockQuantity,
+            ImageUrl = string.IsNullOrEmpty(p.ImageUrl) ? "https://ui-avatars.com/api/?name=SP" : p.ImageUrl,
+            SoldQuantity = 0
+        }).OrderBy(i => i.StockQuantity).ToList();
+    }
+
+    private void OpenAdjustModal(InventoryItem item) { selectedProduct = item; addQuantity = 1; }
+    private void CloseModal() { selectedProduct = null; }
+
+    private async Task SaveStock()
+    {
+        if (selectedProduct != null && addQuantity > 0)
+        {
+            using var scope = ServiceProvider.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ShopPetDatabaseContext>();
+
+            // Cập nhật bằng SQL Thuần => Lướt qua lỗi Tracker, đóng modal mượt mà
+            string sql = "UPDATE Products SET stock_quantity = stock_quantity + @p0 WHERE product_id = @p1";
+            await db.Database.ExecuteSqlRawAsync(sql, addQuantity, selectedProduct.ProductId);
+
+            selectedProduct = null;
+            await LoadInventory();
+            StateHasChanged();
+        }
+    }
+}

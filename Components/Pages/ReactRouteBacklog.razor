@@ -1,38 +1,14 @@
-@page "/about"
-@page "/boarding"
-@page "/boarding-checkout"
-@page "/boarding-checkout/success"
-@page "/boarding-checkout/cancel"
-@page "/system"
-@page "/products/create"
-
-@inject NavigationManager Navigation
+﻿@page "/react-backlog"
+@layout Components.Layout.StaffWorkspaceLayout
 
 <PageTitle>@Title</PageTitle>
 
-<section class="section-block">
-    <div class="section-heading">
-        <span>React source route</span>
-        <h1>@Title</h1>
-    </div>
-    <p>This React route has been mapped from the source frontend but is not implemented in Blazor yet.</p>
-    <p>Status: Blocked until the matching React page, API contract, state flow, CSS, and assets are ported.</p>
-    <a class="btn-secondary" href="/">Back to home</a>
-</section>
+<div class="d-flex flex-column justify-content-center align-items-center text-center py-5 mt-5">
+    <i class="fas fa-tools text-warning mb-4" style="font-size: 5rem;"></i>
+    <h1 class="fw-bold text-dark mb-3">Tính năng đang phát triển</h1>
+    <p class="fs-4 text-muted w-50">Trang này hiện đang được nâng cấp hệ thống (Chuyển đổi React sang Blazor C#). Vui lòng quay lại sau.</p>
+</div>
 
 @code {
-    private string Title => new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/').ToLowerInvariant() switch
-    {
-        "/account" => "Account profile",
-        "/profile/edit" => "Edit profile",
-        "/account/pets" => "Pet information",
-        "/about" => "About",
-        "/boarding" => "Boarding rooms",
-        "/boarding-checkout" => "Boarding checkout",
-        "/boarding-checkout/success" => "Boarding checkout success",
-        "/boarding-checkout/cancel" => "Boarding checkout cancelled",
-        "/system" => "Staff system",
-        "/products/create" => "Create product",
-        _ => "Mapped React route"
-    };
+    private string Title { get; set; } = "Hệ thống đang bảo trì";
 }

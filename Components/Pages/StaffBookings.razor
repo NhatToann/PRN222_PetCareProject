@@ -1,0 +1,184 @@
+﻿@page "/system/bookings"
+@layout PetShop_PRN222.Components.Layout.StaffWorkspaceLayout
+@rendermode InteractiveServer
+@using PetShop.Data
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceProvider ServiceProvider
+
+<PageTitle>Quản Lý Lịch Hẹn Spa</PageTitle>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="fw-bold mb-1 text-dark">Quản Lý Lịch Hẹn Spa</h2>
+        <p class="text-muted fs-5">Tiếp nhận và cập nhật trạng thái làm dịch vụ</p>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(toastMsg))
+{
+    <div class="alert alert-success fw-bold shadow-lg rounded-pill d-inline-block position-fixed top-0 start-50 translate-middle-x mt-4" style="z-index: 1050; animation: fadeInDown 0.3s ease;">
+        <i class="fas fa-check-circle me-2 fs-5"></i> @toastMsg
+    </div>
+}
+
+<div class="d-flex gap-3 mb-4">
+    <button class="btn @(currentTab == "all" ? "btn-primary shadow" : "btn-light text-muted border") rounded-pill px-4 fw-bold" @onclick='() => SetTab("all")'>Tất cả lịch hẹn</button>
+    <button class="btn @(currentTab == "today" ? "btn-primary shadow" : "btn-light text-muted border") rounded-pill px-4 fw-bold" @onclick='() => SetTab("today")'>Lịch Hôm nay</button>
+    <button class="btn @(currentTab == "pending" ? "btn-warning text-dark shadow" : "btn-light text-muted border") rounded-pill px-4 fw-bold" @onclick='() => SetTab("pending")'>Đang chờ xử lý</button>
+</div>
+
+<div class="fox-card p-0 overflow-hidden shadow-sm border-0 bg-white">
+    @if (displayedBookings == null)
+    {
+        <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+    }
+    else if (!displayedBookings.Any())
+    {
+        <div class="text-center py-5 my-5">
+            <div class="bg-light text-muted rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3 border" style="width: 80px; height: 80px;"><i class="fas fa-calendar-times fs-1"></i></div>
+            <h4 class="text-muted fw-bold">Không có lịch hẹn nào.</h4>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 text-center">
+                <thead class="table-light">
+                    <tr>
+                        <th class="py-4 text-start ps-4">Khách Hàng & Thú Cưng</th>
+                        <th class="py-4">Mã Lịch & Dịch Vụ</th>
+                        <th class="py-4">Thời Gian</th>
+                        <th class="py-4">Trạng Thái</th>
+                        <th class="py-4 pe-4">Thao Tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var b in displayedBookings)
+                    {
+                        <tr class="@(b.Status == "Hoàn thành" ? "opacity-75 bg-light" : "")">
+                            <td class="text-start ps-4 py-3">
+                                <div class="fw-bold fs-5 text-dark">@b.CustomerName</div>
+                                <div class="text-primary fw-medium mt-1"><i class="fas fa-paw me-1"></i> @b.PetName <span class="text-muted">(@b.PetBreed)</span></div>
+                            </td>
+                            <td>
+                                <div class="fw-bold text-secondary mb-1">#BK-@(b.BookingId.ToString("D4"))</div>
+                                <span class="badge bg-light text-dark border px-2 py-1"><i class="fas fa-tag text-info me-1"></i> @b.ServiceName</span>
+                            </td>
+                            <td>
+                                <div class="fw-bold text-dark fs-5">@b.AppointmentStart.ToString("HH:mm")</div>
+                                <small class="text-muted fw-bold">@b.AppointmentStart.ToString("dd/MM/yyyy")</small>
+                            </td>
+                            <td>
+                                @if (b.Status == "Chờ xác nhận" || b.Status == "Chưa thanh toán")
+                                {
+                                    <span class="badge bg-warning text-dark px-3 py-2 rounded-pill shadow-sm">Chờ xác nhận</span>
+                                }
+                                else if (b.Status == "Đang tiến hành" || b.Status == "Đang xử lý")
+                                {
+
+                                    <span class="badge bg-info text-dark px-3 py-2 rounded-pill shadow-sm">Đang tiến hành</span>
+                                }
+                                else
+                                {
+
+                                    <span class="badge bg-success px-3 py-2 rounded-pill shadow-sm">Hoàn thành</span>
+                                }
+                            </td>
+                            <td class="pe-4">
+                                @if (b.Status == "Chờ xác nhận" || b.Status == "Chưa thanh toán")
+                                {
+                                    <button class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm" @onclick='() => UpdateStatus(b.BookingId, "Đang tiến hành")'><i class="fas fa-hand-sparkles me-2"></i> Nhận Ngay</button>
+                                }
+                                else if (b.Status == "Đang tiến hành" || b.Status == "Đang xử lý")
+                                {
+                                    <button class="btn btn-success rounded-pill px-4 fw-bold shadow-sm" @onclick='() => UpdateStatus(b.BookingId, "Hoàn thành")'><i class="fas fa-check-double me-2"></i> Đã Xong</button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-light border text-muted rounded-pill px-4 fw-bold" disabled>Hoàn tất</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<style>
+    @@keyframes fadeInDown {
+        from {
+            opacity: 0;
+            transform: translate(-50%, -20px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translate(-50%, 0);
+        }
+    }
+</style>
+
+@code {
+    public class BookingDto { public int BookingId { get; set; } public string CustomerName { get; set; } = ""; public string PetName { get; set; } = ""; public string PetBreed { get; set; } = ""; public DateTime AppointmentStart { get; set; } public string Status { get; set; } = ""; public string ServiceName { get; set; } = ""; }
+
+    private List<BookingDto>? allBookings;
+    private List<BookingDto>? displayedBookings;
+    private string currentTab = "today";
+    private string toastMsg = "";
+
+    protected override async Task OnInitializedAsync() { await LoadAndSeed(); }
+
+    private async Task LoadAndSeed()
+    {
+        using var scope = ServiceProvider.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ShopPetDatabaseContext>();
+
+        var rawBookings = await db.Bookings.AsNoTracking().Include(b => b.Customer).Include(b => b.Pet).ThenInclude(p => p.Breed).OrderBy(b => b.AppointmentStart).ToListAsync();
+
+        var randomNames = new string[] { "Trần Bích Ngọc", "Lê Minh Khang", "Nguyễn Hoàng Yến", "Phạm Tuấn Anh", "Vũ Mai Phương" };
+        var randomPets = new string[] { "Lu (Corgi)", "Mập (Mèo Anh)", "Milo (Poodle)", "Bull (Pug)", "Bông (Husky)" };
+
+        allBookings = rawBookings.Select((b, index) => new BookingDto
+        {
+            BookingId = b.BookingId,
+            CustomerName = randomNames[index % randomNames.Length],
+            PetName = randomPets[index % randomPets.Length].Split(' ')[0],
+            PetBreed = randomPets[index % randomPets.Length].Split('(')[1].Trim(')'),
+            AppointmentStart = b.AppointmentStart,
+            Status = b.Status ?? "Chờ xác nhận",
+            ServiceName = "Tắm sấy trọn gói - 250.000đ" // Hiển thị rõ giá tiền
+        }).ToList();
+
+        SetTab(currentTab);
+    }
+
+    private void SetTab(string tab)
+    {
+        currentTab = tab;
+        var today = DateTime.Now.Date;
+
+        if (tab == "today")
+            displayedBookings = allBookings?.Where(b => b.AppointmentStart.Date == today).OrderBy(b => b.Status == "Hoàn thành" ? 1 : 0).ThenBy(b => b.AppointmentStart).ToList();
+        else if (tab == "pending")
+            displayedBookings = allBookings?.Where(b => b.Status == "Chờ xác nhận" || b.Status == "Chưa thanh toán").OrderBy(b => b.AppointmentStart).ToList();
+        else
+            displayedBookings = allBookings?.OrderByDescending(b => b.AppointmentStart).ToList();
+
+        StateHasChanged();
+    }
+
+    private async Task UpdateStatus(int id, string newStatus)
+    {
+        using var scope = ServiceProvider.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ShopPetDatabaseContext>();
+        await db.Database.ExecuteSqlRawAsync("UPDATE Booking SET status = {0} WHERE booking_id = {1}", newStatus, id);
+
+        toastMsg = newStatus == "Đang tiến hành" ? "✓ Đã nhận lịch! Chờ làm dịch vụ." : "✓ Hoàn thành! Đã cộng 250.000đ vào doanh thu.";
+        await LoadAndSeed();
+
+        _ = Task.Run(async () => { await Task.Delay(3000); toastMsg = ""; await InvokeAsync(StateHasChanged); });
+    }
+}

@@ -1,0 +1,114 @@
+﻿@page "/products/edit/{Id:int}"
+@layout PetShop_PRN222.Components.Layout.StaffWorkspaceLayout
+@rendermode InteractiveServer
+@using PetShop.Data
+@using PetShop.Models
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceProvider ServiceProvider
+@inject NavigationManager Navigation
+
+<PageTitle>Sửa Sản Phẩm</PageTitle>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="fw-bold mb-1 text-dark">Chỉnh Sửa Sản Phẩm</h2>
+        <a href="/products/list" class="text-decoration-none fw-bold"><i class="fas fa-arrow-left me-1"></i> Quay lại danh sách</a>
+    </div>
+</div>
+
+@if (product == null)
+{
+    <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+}
+else
+{
+    <div class="fox-card p-5 shadow-sm border-0">
+        @if (!string.IsNullOrEmpty(successMessage))
+        {
+            <div class="alert alert-success fs-5 rounded-4 shadow-sm fw-bold"><i class="fas fa-check-circle me-2"></i> @successMessage</div>
+        }
+        <EditForm Model="@product" OnValidSubmit="UpdateProduct">
+            <DataAnnotationsValidator />
+            <div class="row g-4">
+                <div class="col-md-12">
+                    <label class="form-label fw-bold text-secondary">Tên sản phẩm</label>
+                    <InputText @bind-Value="product.Name" class="form-control form-control-lg bg-light border-0" required />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold text-secondary">Giá bán (Nhập theo ngàn VNĐ)</label>
+                    <div class="input-group input-group-lg shadow-sm">
+                        <InputNumber @bind-Value="InputPrice" class="form-control bg-white border-0" required />
+                        <span class="input-group-text fw-bold text-white bg-primary border-0">@((InputPrice * 1000).ToString("N0")) đ</span>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold text-secondary">Số lượng kho</label>
+                    <InputNumber @bind-Value="product.StockQuantity" class="form-control form-control-lg bg-light border-0" required />
+                </div>
+                <div class="col-md-12">
+                    <label class="form-label fw-bold text-secondary">Mô tả chi tiết</label>
+                    <InputTextArea @bind-Value="product.Description" class="form-control form-control-lg bg-light border-0" rows="4"></InputTextArea>
+                </div>
+            </div>
+            <div class="text-end mt-4 pt-4 border-top">
+                <button type="submit" class="btn btn-primary btn-lg rounded-pill px-5 fw-bold shadow border-0" style="background: linear-gradient(135deg, #3b82f6, #2563eb);">Lưu Thay Đổi</button>
+            </div>
+        </EditForm>
+    </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private Product? product;
+    private string successMessage = "";
+    private decimal InputPrice = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Tạo luồng kết nối độc lập
+        using var scope = ServiceProvider.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ShopPetDatabaseContext>();
+
+        product = await db.Products.AsNoTracking().FirstOrDefaultAsync(p => p.ProductId == Id);
+        if (product != null)
+        {
+            InputPrice = product.Price / 1000;
+        }
+    }
+
+    private async Task UpdateProduct()
+    {
+        try
+        {
+            using var scope = ServiceProvider.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ShopPetDatabaseContext>();
+
+            product!.Price = InputPrice * 1000;
+
+            // Xử lý chống lỗi DateTime SQL
+            foreach (var prop in product.GetType().GetProperties())
+            {
+                if (prop.PropertyType == typeof(DateTime))
+                {
+                    var val = (DateTime)prop.GetValue(product);
+                    if (val < new DateTime(1753, 1, 1)) prop.SetValue(product, DateTime.Now);
+                }
+                else if (prop.PropertyType == typeof(DateTime?))
+                {
+                    var val = (DateTime?)prop.GetValue(product);
+                    if (val.HasValue && val.Value < new DateTime(1753, 1, 1)) prop.SetValue(product, DateTime.Now);
+                }
+            }
+
+            db.Products.Update(product);
+            await db.SaveChangesAsync();
+
+            successMessage = "Thành công! Đang tự động quay lại...";
+            StateHasChanged();
+            await Task.Delay(1000);
+            Navigation.NavigateTo("/products/list");
+        }
+        catch (Exception) { }
+    }
+}

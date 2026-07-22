@@ -16,11 +16,13 @@
         @if (!IsDoctor)
         {
             <FeaturedCategories />
-            <ProductList Products="products"
-                         Loading="isLoadingProducts"
-                         Error="@productError"
-                         OnAddToCart="ShowAddedToastAsync"
-                         OnRetry="LoadProductsAsync" />
+
+            <!-- FIX TRỤC TRẶC TRÙNG TÊN: Dùng namespace tuyệt đối trỏ thẳng vào thư mục Home -->
+            <PetShop_PRN222.Components.Home.ProductList Products="products"
+                                                        Loading="isLoadingProducts"
+                                                        Error="@productError"
+                                                        OnAddToCart="ShowAddedToastAsync"
+                                                        OnRetry="LoadProductsAsync" />
         }
         <CustomerReviews />
     </main>
