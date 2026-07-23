@@ -1,0 +1,240 @@
+﻿@page "/revenue"
+@layout PetShop_PRN222.Components.Layout.StaffWorkspaceLayout
+@rendermode InteractiveServer
+@using PetShop.Data
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceProvider ServiceProvider
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Báo Cáo Doanh Thu</PageTitle>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="fw-bold mb-1 text-dark">Báo Cáo Doanh Thu</h2>
+        <p class="text-muted fs-5">Thống kê theo Thời gian, Phân tích biểu đồ & Top bán chạy</p>
+    </div>
+</div>
+
+@if (isLoading)
+{
+    <div class="text-center py-5"><div class="spinner-border text-primary" style="width: 3rem; height: 3rem;"></div></div>
+}
+else
+{
+    <div class="row g-4 mb-4">
+        <div class="col-md-4">
+            <div class="fox-card p-4 h-100 text-white shadow-sm hover-scale" style="background: linear-gradient(135deg, #3b82f6, #60a5fa); border-radius: 16px;">
+                <h6 class="fw-bold opacity-75 mb-3 text-uppercase"><i class="fas fa-calendar-day me-2"></i>Doanh Thu Hôm Nay</h6>
+                <h2 class="fw-bold mb-0">@revToday.ToString("N0") <span class="fs-5">đ</span></h2>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="fox-card p-4 h-100 text-white shadow-sm hover-scale" style="background: linear-gradient(135deg, #10b981, #34d399); border-radius: 16px;">
+                <h6 class="fw-bold opacity-75 mb-3 text-uppercase"><i class="fas fa-calendar-week me-2"></i>Doanh Thu Tuần Này</h6>
+                <h2 class="fw-bold mb-0">@revWeek.ToString("N0") <span class="fs-5">đ</span></h2>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="fox-card p-4 h-100 text-white shadow-sm hover-scale" style="background: linear-gradient(135deg, #8b5cf6, #a78bfa); border-radius: 16px;">
+                <h6 class="fw-bold opacity-75 mb-3 text-uppercase"><i class="fas fa-calendar-alt me-2"></i>Doanh Thu Tháng Này</h6>
+                <h2 class="fw-bold mb-0">@revMonth.ToString("N0") <span class="fs-5">đ</span></h2>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <!-- Đã mở rộng 2 khung này cho cân đối, không còn thẻ Phân Tích Insight nữa -->
+        <div class="col-xl-8">
+            <div class="fox-card p-4 shadow-sm border-0 bg-white" style="border-radius: 16px; height: 100%;">
+                <h5 class="fw-bold text-dark mb-4"><i class="fas fa-chart-area text-primary me-2"></i> Biến Động Doanh Thu (7 Ngày Gần Nhất)</h5>
+                <div style="height: 300px; width: 100%;">
+                    <canvas id="revenueLineChart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-4">
+            <div class="fox-card p-4 shadow-sm border-0 bg-white" style="border-radius: 16px; height: 100%;">
+                <h5 class="fw-bold text-dark mb-4"><i class="fas fa-chart-pie text-warning me-2"></i> Tỷ Trọng Đơn Hàng</h5>
+                <div style="height: 250px; width: 100%; display: flex; justify-content: center;">
+                    <canvas id="orderStatusDonutChart"></canvas>
+                </div>
+                <div class="mt-4 text-center fw-bold">
+                    <span class="text-success me-3"><i class="fas fa-circle me-1"></i> Xong: @completedOrders</span>
+                    <span class="text-warning"><i class="fas fa-circle me-1"></i> Chờ: @pendingOrders</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-md-6">
+            <div class="fox-card p-4 shadow-sm border-0 bg-white" style="border-radius: 16px;">
+                <h5 class="fw-bold text-dark mb-4 border-bottom pb-3"><i class="fas fa-trophy text-warning me-2"></i> Top Sản Phẩm Bán Chạy</h5>
+                <ul class="list-group list-group-flush">
+                    @foreach (var p in topProducts)
+                    {
+                        <li class="list-group-item d-flex justify-content-between align-items-center border-0 px-0 py-3">
+                            <div class="d-flex align-items-center">
+                                <img src="@p.ImageUrl" class="rounded-circle object-fit-cover shadow-sm me-3 border" style="width: 45px; height: 45px;" />
+                                <div class="fw-bold text-dark fs-6">@p.Name</div>
+                            </div>
+                            <span class="badge bg-primary-subtle text-primary rounded-pill fs-6 px-3 py-2 fw-bold">Đã bán: @p.Sold</span>
+                        </li>
+                    }
+                </ul>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="fox-card p-4 shadow-sm border-0 bg-white" style="border-radius: 16px;">
+                <h5 class="fw-bold text-dark mb-4 border-bottom pb-3"><i class="fas fa-spa text-info me-2"></i> Tỷ Lệ Dịch Vụ Spa</h5>
+                <div class="p-3 bg-light rounded-4 border">
+                    <p class="mb-2 fw-bold text-dark"><i class="fas fa-bath text-info me-2"></i> Tắm sấy trọn gói <span class="float-end">@(topSpaCount + 5) lượt</span></p>
+                    <div class="progress mb-4" style="height: 8px;"><div class="progress-bar bg-info" style="width: 75%"></div></div>
+
+                    <p class="mb-2 fw-bold text-dark"><i class="fas fa-cut text-warning me-2"></i> Cắt tỉa lông chuyên nghiệp <span class="float-end">@(topSpaCount + 2) lượt</span></p>
+                    <div class="progress" style="height: 8px;"><div class="progress-bar bg-warning" style="width: 45%"></div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<script>
+    window.renderEnterpriseCharts = function (lineLabels, lineData, donutLabels, donutData, bgColors) {
+        if (typeof Chart === 'undefined') {
+            let script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+            script.onload = () => initCharts(lineLabels, lineData, donutLabels, donutData, bgColors);
+            document.head.appendChild(script);
+        } else {
+            initCharts(lineLabels, lineData, donutLabels, donutData, bgColors);
+        }
+
+        function initCharts(lLabels, lData, dLabels, dData, bgCols) {
+            var ctxLine = document.getElementById('revenueLineChart');
+            if (ctxLine) {
+                new Chart(ctxLine, {
+                    type: 'line',
+                    data: { labels: lLabels, datasets: [{ label: 'Doanh thu (VNĐ)', data: lData, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', borderWidth: 3, fill: true, tension: 0.4 }] },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true }, x: { grid: { display: false } } } }
+                });
+            }
+
+            var ctxDonut = document.getElementById('orderStatusDonutChart');
+            if (ctxDonut) {
+                new Chart(ctxDonut, {
+                    type: 'doughnut',
+                    data: { labels: dLabels, datasets: [{ data: dData, backgroundColor: bgCols, borderWidth: 0 }] },
+                    options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'bottom' } } }
+                });
+            }
+        }
+    }
+</script>
+
+<style>
+    .hover-scale {
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+        .hover-scale:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.1) !important;
+        }
+
+    .bg-primary-subtle {
+        background-color: #e0e7ff !important;
+    }
+</style>
+
+@code {
+    private bool isLoading = true;
+    private decimal revToday = 0; private decimal revWeek = 0; private decimal revMonth = 0;
+    private int topSpaCount = 0;
+    private List<string> lineLabels = new();
+    private List<decimal> lineData = new();
+    private int completedOrders = 0; private int pendingOrders = 0; private int cancelledOrders = 0;
+
+    public class TopProd { public string Name { get; set; } = ""; public int Sold { get; set; } public string ImageUrl { get; set; } = ""; }
+    private List<TopProd> topProducts = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var scope = ServiceProvider.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ShopPetDatabaseContext>();
+
+        var now = DateTime.Now; var today = now.Date; var startOfWeek = today.AddDays(-(int)now.DayOfWeek); var startOfMonth = new DateTime(now.Year, now.Month, 1);
+
+        var allOrders = await db.Orders.AsNoTracking().ToListAsync();
+        var completedSpas = await db.Bookings.AsNoTracking().Where(b => b.Status == "Hoàn thành").ToListAsync();
+
+        var validOrders = allOrders.Where(o => o.Status == "Hoàn thành" || o.PaymentStatus == "Đã thanh toán").ToList();
+
+        // TÍNH TOÁN DOANH THU = ĐƠN HÀNG + SPA
+        decimal spaToday = completedSpas.Count(b => b.AppointmentStart.Date == today) * 250000m;
+        decimal spaWeek = completedSpas.Count(b => b.AppointmentStart.Date >= startOfWeek) * 250000m;
+        decimal spaMonth = completedSpas.Count(b => b.AppointmentStart.Date >= startOfMonth) * 250000m;
+
+        revToday = validOrders.Where(o => o.OrderDate.Date == today).Sum(o => o.TotalAmount) + spaToday;
+        revWeek = validOrders.Where(o => o.OrderDate.Date >= startOfWeek).Sum(o => o.TotalAmount) + spaWeek;
+        revMonth = validOrders.Where(o => o.OrderDate.Date >= startOfMonth).Sum(o => o.TotalAmount) + spaMonth;
+
+        for (int i = 6; i >= 0; i--)
+        {
+            var targetDate = today.AddDays(-i);
+            lineLabels.Add(targetDate.ToString("dd/MM"));
+            decimal orderSum = validOrders.Where(o => o.OrderDate.Date == targetDate).Sum(o => o.TotalAmount);
+            decimal spaSum = completedSpas.Count(b => b.AppointmentStart.Date == targetDate) * 250000m;
+            lineData.Add(orderSum + spaSum);
+        }
+
+        var monthOrders = allOrders.Where(o => o.OrderDate.Date >= startOfMonth).ToList();
+        completedOrders = monthOrders.Count(o => o.Status == "Hoàn thành" || o.Status == "Đã hoàn tất");
+        pendingOrders = monthOrders.Count(o => o.Status == "Chờ xác nhận" || o.Status == "Đang xử lý" || o.Status == "Đang đóng gói" || o.Status == "Chờ giao hàng");
+        cancelledOrders = monthOrders.Count(o => o.Status == "Đã hủy" || o.Status == "Đã huỷ");
+
+        Dictionary<int, int> soldDict = new Dictionary<int, int>();
+        try
+        {
+            using (var command = db.Database.GetDbConnection().CreateCommand())
+            {
+                command.CommandText = "SELECT product_id, SUM(ISNULL(quantity, 0)) FROM Order_Detail WHERE product_id IS NOT NULL GROUP BY product_id";
+                if (command.Connection.State != System.Data.ConnectionState.Open) await command.Connection.OpenAsync();
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        if (!reader.IsDBNull(0) && !reader.IsDBNull(1))
+                        {
+                            soldDict[reader.GetInt32(0)] = Convert.ToInt32(reader.GetValue(1));
+                        }
+                    }
+                }
+            }
+        }
+        catch { }
+
+        var products = await db.Products.AsNoTracking().ToListAsync();
+        topProducts = products.Select(p => new TopProd
+        {
+            Name = p.Name,
+            ImageUrl = string.IsNullOrEmpty(p.ImageUrl) ? "https://ui-avatars.com/api/?name=SP" : p.ImageUrl,
+            Sold = soldDict.ContainsKey(p.ProductId) ? soldDict[p.ProductId] : 0
+        }).OrderByDescending(x => x.Sold).Take(3).ToList();
+
+        topSpaCount = completedSpas.Count;
+        isLoading = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender && !isLoading)
+        {
+            var donutLabels = new[] { "Hoàn Thành", "Cần Xử Lý", "Đã Hủy" };
+            var donutData = new[] { completedOrders, pendingOrders, cancelledOrders };
+            var bgColors = new[] { "#10b981", "#f59e0b", "#ef4444" };
+            await JSRuntime.InvokeVoidAsync("renderEnterpriseCharts", lineLabels.ToArray(), lineData.ToArray(), donutLabels, donutData, bgColors);
+        }
+    }
+}

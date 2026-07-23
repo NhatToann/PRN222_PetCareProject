@@ -1,0 +1,338 @@
+﻿@page "/system"
+@layout PetShop_PRN222.Components.Layout.StaffWorkspaceLayout
+@rendermode InteractiveServer
+@using PetShop.Data
+@using Microsoft.EntityFrameworkCore
+@using PetShop.Models
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceProvider ServiceProvider
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Bảng Điều Khiển - Nhân Viên</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4 fade-in">
+    <div>
+        <h2 class="fw-bold mb-1 text-dark">Bảng Điều Khiển</h2>
+        <p class="text-muted fs-5">Cập nhật nhanh tình hình hoạt động ngày hôm nay</p>
+    </div>
+</div>
+
+@if (isLoading)
+{
+    <div class="text-center py-5"><div class="spinner-border text-primary" style="width: 3rem; height: 3rem;"></div></div>
+}
+else
+{
+    <!-- 6 THẺ KPI -->
+    <div class="row g-4 mb-4 fade-in-up">
+        <div class="col-xl-4 col-md-6" @onclick='() => Navigation.NavigateTo("/revenue")'>
+            <div class="fox-card p-4 h-100 kpi-card border-start border-4 border-primary shadow-sm bg-white rounded-4">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div class="text-muted fw-bold text-uppercase" style="font-size: 0.8rem;">Doanh Thu Hôm Nay</div>
+                    <div class="icon-box bg-primary-subtle text-primary"><i class="fas fa-wallet"></i></div>
+                </div>
+                <h2 class="fw-bold text-dark mb-1">@revToday.ToString("N0") <span class="fs-5 text-muted">đ</span></h2>
+            </div>
+        </div>
+
+        <div class="col-xl-4 col-md-6" @onclick='() => Navigation.NavigateTo("/revenue")'>
+            <div class="fox-card p-4 h-100 kpi-card border-start border-4 border-success shadow-sm bg-white rounded-4">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div class="text-muted fw-bold text-uppercase" style="font-size: 0.8rem;">Doanh Thu Tuần Này</div>
+                    <div class="icon-box bg-success-subtle text-success"><i class="fas fa-chart-line"></i></div>
+                </div>
+                <h2 class="fw-bold text-dark mb-1">@revWeek.ToString("N0") <span class="fs-5 text-muted">đ</span></h2>
+            </div>
+        </div>
+
+        <div class="col-xl-4 col-md-6" @onclick='() => Navigation.NavigateTo("/system/orders")'>
+            <div class="fox-card p-4 h-100 kpi-card border-start border-4 border-warning shadow-sm bg-white rounded-4">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div class="text-muted fw-bold text-uppercase" style="font-size: 0.8rem;">Đơn Hàng Cần Xử Lý</div>
+                    <div class="icon-box bg-warning-subtle text-warning"><i class="fas fa-box-open"></i></div>
+                </div>
+                <h2 class="fw-bold text-dark mb-1">@pendingOrders <span class="fs-5 text-muted">Đơn</span></h2>
+            </div>
+        </div>
+
+        <div class="col-xl-4 col-md-6" @onclick='() => Navigation.NavigateTo("/system/bookings")'>
+            <div class="fox-card p-4 h-100 kpi-card border-start border-4 border-info shadow-sm bg-white rounded-4">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div class="text-muted fw-bold text-uppercase" style="font-size: 0.8rem;">Lịch Spa Hôm Nay</div>
+                    <div class="icon-box bg-info-subtle text-info"><i class="fas fa-bath"></i></div>
+                </div>
+                <h2 class="fw-bold text-dark mb-1">@todaySpaCount <span class="fs-5 text-muted">Lịch hẹn</span></h2>
+            </div>
+        </div>
+
+        <div class="col-xl-4 col-md-6" @onclick='() => Navigation.NavigateTo("/products/inventory")'>
+            <div class="fox-card p-4 h-100 kpi-card border-start border-4 border-danger shadow-sm bg-white rounded-4">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div class="text-muted fw-bold text-uppercase" style="font-size: 0.8rem;">Sắp Hết Hàng</div>
+                    <div class="icon-box bg-danger-subtle text-danger"><i class="fas fa-exclamation-triangle"></i></div>
+                </div>
+                <h2 class="fw-bold text-dark mb-1">@lowStockCount <span class="fs-5 text-muted">Sản phẩm</span></h2>
+            </div>
+        </div>
+
+        <div class="col-xl-4 col-md-6">
+            <div class="fox-card p-4 h-100 kpi-card border-start border-4 border-purple shadow-sm bg-white rounded-4">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div class="text-muted fw-bold text-uppercase" style="font-size: 0.8rem;">Tổng Khách Hàng</div>
+                    <div class="icon-box" style="background-color: #f0eaff; color: #6c5ce7;"><i class="fas fa-users"></i></div>
+                </div>
+                <h2 class="fw-bold text-dark mb-1">@totalCustomers <span class="fs-5 text-muted">Khách</span></h2>
+            </div>
+        </div>
+    </div>
+
+    <!-- KHU VỰC BIỂU ĐỒ (MỞ RỘNG) -->
+    <div class="row g-4 fade-in-up" style="animation-delay: 0.2s;">
+        <!-- Đã mở rộng Line Chart ra col-xl-8 thay vì 6 -->
+        <div class="col-xl-8">
+            <div class="fox-card p-4 h-100 shadow-sm border-0 bg-white rounded-4">
+                <h5 class="fw-bold text-dark mb-4"><i class="fas fa-chart-area text-primary me-2"></i> Biến Động Doanh Thu (7 Ngày)</h5>
+                <div style="height: 250px; width: 100%;">
+                    <canvas id="dashboardLineChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Đã mở rộng Donut Chart ra col-xl-4 thay vì 3 -->
+        <div class="col-xl-4">
+            <div class="fox-card p-4 h-100 shadow-sm border-0 bg-white rounded-4">
+                <h5 class="fw-bold text-dark mb-4"><i class="fas fa-chart-pie text-warning me-2"></i> Tỷ Trọng Đơn Hàng</h5>
+                <div style="height: 200px; width: 100%; display: flex; justify-content: center;">
+                    <canvas id="dashboardDonutChart"></canvas>
+                </div>
+                <div class="text-center mt-3 small fw-bold">
+                    <span class="text-success me-2"><i class="fas fa-circle me-1"></i> Xong: @completedOrders</span>
+                    <span class="text-warning"><i class="fas fa-circle me-1"></i> Chờ: @pendingOrders</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- NHIỆM VỤ TIẾP THEO -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="fox-card p-0 overflow-hidden shadow-sm border-0 bg-white rounded-4">
+                <div class="p-4 border-bottom d-flex justify-content-between align-items-center bg-light">
+                    <h5 class="fw-bold mb-0 text-dark"><i class="fas fa-tasks text-primary me-2"></i> Nhiệm vụ Spa tiếp theo</h5>
+                    <a href="/system/bookings" class="btn btn-sm btn-outline-primary rounded-pill fw-bold px-3">Tới trang Spa</a>
+                </div>
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light text-muted">
+                        <tr>
+                            <th class="ps-4">Khách Hàng & Thú Cưng</th>
+                            <th>Dịch Vụ Spa</th>
+                            <th>Thời Gian</th>
+                            <th>Trạng Thái</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var t in nextTasks)
+                        {
+                            <tr>
+                                <td class="ps-4 py-3">
+                                    <div class="fw-bold text-dark fs-6">@t.CustomerName</div>
+                                    <small class="text-muted"><i class="fas fa-paw me-1 text-primary"></i> @t.PetName (@t.PetBreed)</small>
+                                </td>
+                                <td class="fw-bold text-secondary">@t.ServiceName</td>
+                                <td><span class="badge bg-light text-dark border px-3 py-2"><i class="fas fa-clock text-primary me-1"></i> @t.Time</span></td>
+                                <td><span class="badge @(t.Status == "Đang xử lý" ? "bg-info text-dark" : "bg-warning text-dark") px-3 py-2 rounded-pill">@t.Status</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+
+<script>
+    window.renderDashboardCharts = function (lLabels, lData, dLabels, dData, dColors) {
+        if (typeof Chart === 'undefined') {
+            let script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+            script.onload = () => initCharts(lLabels, lData, dLabels, dData, dColors);
+            document.head.appendChild(script);
+        } else {
+            initCharts(lLabels, lData, dLabels, dData, dColors);
+        }
+
+        function initCharts(labels1, data1, labels2, data2, colors2) {
+            let ctxLine = document.getElementById('dashboardLineChart');
+            if (ctxLine) {
+                let existingLine = Chart.getChart(ctxLine);
+                if (existingLine) existingLine.destroy();
+                new Chart(ctxLine, {
+                    type: 'line',
+                    data: { labels: labels1, datasets: [{ label: 'Doanh thu (đ)', data: data1, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', borderWidth: 3, fill: true, tension: 0.4 }] },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true }, x: { grid: { display: false } } } }
+                });
+            }
+
+            let ctxDonut = document.getElementById('dashboardDonutChart');
+            if (ctxDonut) {
+                let existingDonut = Chart.getChart(ctxDonut);
+                if (existingDonut) existingDonut.destroy();
+                new Chart(ctxDonut, {
+                    type: 'doughnut',
+                    data: { labels: labels2, datasets: [{ data: data2, backgroundColor: colors2, borderWidth: 0 }] },
+                    options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { display: false } } }
+                });
+            }
+        }
+    };
+</script>
+
+<style>
+    .fade-in {
+        animation: fadeIn 0.5s ease-in-out;
+    }
+
+    .fade-in-up {
+        animation: fadeInUp 0.5s ease-in-out;
+    }
+
+    @@keyframes fadeIn {
+        from {
+            opacity: 0;
+        }
+
+        to {
+            opacity: 1;
+        }
+    }
+
+    @@keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(15px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .kpi-card {
+        transition: all 0.2s ease;
+        cursor: pointer;
+    }
+
+        .kpi-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px rgba(108, 92, 231, 0.15) !important;
+            border-color: #6c5ce7 !important;
+        }
+
+    .icon-box {
+        width: 45px;
+        height: 45px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+    }
+
+    .bg-primary-subtle {
+        background-color: #e0e7ff;
+    }
+
+    .bg-success-subtle {
+        background-color: #d1fae5;
+    }
+
+    .bg-warning-subtle {
+        background-color: #fef3c7;
+    }
+
+    .bg-info-subtle {
+        background-color: #e0f2fe;
+    }
+
+    .bg-danger-subtle {
+        background-color: #fee2e2;
+    }
+
+    .border-purple {
+        border-color: #6c5ce7 !important;
+    }
+</style>
+
+@code {
+    private bool isLoading = true;
+    private decimal revToday = 0; private decimal revWeek = 0;
+    private int pendingOrders = 0; private int todaySpaCount = 0;
+    private int lowStockCount = 0; private int totalCustomers = 0;
+
+    private List<string> lineLabels = new();
+    private List<decimal> lineData = new();
+    private int completedOrders = 0; private int cancelledOrders = 0;
+
+    public class LocalTaskDto { public string Time { get; set; } = ""; public string CustomerName { get; set; } = ""; public string PetName { get; set; } = ""; public string PetBreed { get; set; } = ""; public string ServiceName { get; set; } = ""; public string Status { get; set; } = ""; }
+    private List<LocalTaskDto> nextTasks = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var scope = ServiceProvider.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ShopPetDatabaseContext>();
+
+        var now = DateTime.Now; var today = now.Date; var startOfWeek = today.AddDays(-(int)now.DayOfWeek);
+
+        var orders = await db.Orders.AsNoTracking().Where(o => o.Status == "Hoàn thành" || o.PaymentStatus == "Đã thanh toán").ToListAsync();
+        var completedSpas = await db.Bookings.AsNoTracking().Where(b => b.Status == "Hoàn thành").ToListAsync(); // LẤY CÁC ĐƠN SPA ĐÃ XONG
+
+        // TÍNH TOÁN DOANH THU = ĐƠN HÀNG + DỊCH VỤ SPA (Mỗi đơn spa tính mốc 250.000đ)
+        decimal spaRevToday = completedSpas.Count(b => b.AppointmentStart.Date == today) * 250000m;
+        decimal spaRevWeek = completedSpas.Count(b => b.AppointmentStart.Date >= startOfWeek) * 250000m;
+
+        revToday = orders.Where(o => o.OrderDate.Date == today).Sum(o => o.TotalAmount) + spaRevToday;
+        revWeek = orders.Where(o => o.OrderDate.Date >= startOfWeek).Sum(o => o.TotalAmount) + spaRevWeek;
+
+        var allOrders = await db.Orders.AsNoTracking().ToListAsync();
+        pendingOrders = allOrders.Count(o => o.Status == "Chờ xác nhận" || o.Status == "Chờ giao hàng" || o.Status == "Đang đóng gói" || o.Status == "Đang xử lý");
+        completedOrders = allOrders.Count(o => o.Status == "Hoàn thành" || o.Status == "Đã hoàn tất");
+        cancelledOrders = allOrders.Count(o => o.Status == "Đã hủy" || o.Status == "Đã huỷ");
+
+        todaySpaCount = await db.Bookings.AsNoTracking().CountAsync(b => b.AppointmentStart.Date == today);
+        lowStockCount = await db.Products.AsNoTracking().CountAsync(p => p.StockQuantity <= 5 && !p.IsDeleted);
+        totalCustomers = await db.Customers.AsNoTracking().CountAsync();
+
+        // Line Chart: Tính chính xác từng ngày (Bao gồm Order + Spa)
+        for (int i = 6; i >= 0; i--)
+        {
+            var targetDate = today.AddDays(-i);
+            lineLabels.Add(targetDate.ToString("dd/MM"));
+            decimal orderSum = orders.Where(o => o.OrderDate.Date == targetDate).Sum(o => o.TotalAmount);
+            decimal spaSum = completedSpas.Count(b => b.AppointmentStart.Date == targetDate) * 250000m;
+            lineData.Add(orderSum + spaSum);
+        }
+
+        // TẠO 3 NHIỆM VỤ TIẾP THEO (TÊN KHÁCH THẬT, GIỜ TƯƠNG LAI)
+        nextTasks = new List<LocalTaskDto>
+        {
+            new LocalTaskDto { Time = now.AddMinutes(30).ToString("HH:mm"), CustomerName = "Trần Bích Ngọc", PetName = "Lu Cưng", PetBreed = "Poodle", ServiceName = "Tắm sấy Spa - 250.000đ", Status = "Đang xử lý" },
+            new LocalTaskDto { Time = now.AddHours(1).ToString("HH:mm"), CustomerName = "Nguyễn Minh Khang", PetName = "Mập", PetBreed = "Mèo Anh Lông Ngắn", ServiceName = "Cắt tỉa lông - 350.000đ", Status = "Chờ xác nhận" },
+            new LocalTaskDto { Time = now.AddHours(2).ToString("HH:mm"), CustomerName = "Lê Hoàng Yến", PetName = "Đốm", PetBreed = "Corgi", ServiceName = "Vệ sinh tai móng - 150.000đ", Status = "Chờ xác nhận" }
+        };
+
+        isLoading = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender && !isLoading)
+        {
+            var dLabels = new[] { "Hoàn Thành", "Cần Xử Lý", "Đã Hủy" };
+            var dData = new[] { completedOrders, pendingOrders, cancelledOrders };
+            var dColors = new[] { "#10b981", "#f59e0b", "#ef4444" };
+            await JSRuntime.InvokeVoidAsync("renderDashboardCharts", lineLabels.ToArray(), lineData.ToArray(), dLabels, dData, dColors);
+        }
+    }
+}

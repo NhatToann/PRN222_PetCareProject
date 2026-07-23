@@ -1,0 +1,236 @@
+﻿@page "/system/orders"
+@layout PetShop_PRN222.Components.Layout.StaffWorkspaceLayout
+@rendermode InteractiveServer
+@using PetShop.Data
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceProvider ServiceProvider
+
+<PageTitle>Quản Lý Đơn Hàng</PageTitle>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="fw-bold mb-1 text-dark">Quản Lý Đơn Hàng</h2>
+        <p class="text-muted fs-5">Xử lý tiến trình giao hàng theo thời gian thực</p>
+    </div>
+</div>
+
+<!-- 3 THẺ THỐNG KÊ NHANH (CÓ ĐƠN HỦY) -->
+<div class="row g-4 mb-4">
+    <div class="col-md-4">
+        <div class="fox-card p-4 h-100 border-0 shadow-sm bg-white" style="border-left: 4px solid #f59e0b !important;">
+            <div class="text-muted fw-bold text-uppercase mb-2" style="font-size: 0.8rem;">Cần Xử Lý Ngay</div>
+            <h2 class="fw-bold text-dark mb-0">@pendingCount <span class="fs-6 text-muted fw-normal">đơn chờ</span></h2>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="fox-card p-4 h-100 border-0 shadow-sm bg-white" style="border-left: 4px solid #3b82f6 !important;">
+            <div class="text-muted fw-bold text-uppercase mb-2" style="font-size: 0.8rem;">Đang Giao Cho Khách</div>
+            <h2 class="fw-bold text-dark mb-0">@shippingCount <span class="fs-6 text-muted fw-normal">đơn hàng</span></h2>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="fox-card p-4 h-100 border-0 shadow-sm bg-white" style="border-left: 4px solid #ef4444 !important;">
+            <div class="text-muted fw-bold text-uppercase mb-2" style="font-size: 0.8rem;">Đơn Hàng Đã Hủy</div>
+            <h2 class="fw-bold text-danger mb-0">@cancelledCount <span class="fs-6 text-muted fw-normal">đơn thất bại</span></h2>
+        </div>
+    </div>
+</div>
+
+<div class="fox-card p-0 overflow-hidden shadow-sm border-0">
+    @if (orders == null)
+    {
+        <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+    }
+    else
+    {
+        <table class="table fox-table table-hover align-middle mb-0 text-center">
+            <thead class="table-light">
+                <tr>
+                    <th class="text-start ps-4">Mã Đơn & Khách</th>
+                    <th>Ngày Đặt</th>
+                    <th>Thanh Toán</th>
+                    <th>Trạng Thái Giao</th>
+                    <th class="pe-4">Chi Tiết</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var o in orders)
+                {
+                    <tr class="@(o.Status == "Hoàn thành" || o.Status == "Đã hủy" ? "opacity-75 bg-light" : "")">
+                        <td class="text-start ps-4 py-3">
+                            <div class="fw-bold fs-5 text-dark">#ORD-@(o.OrderId.ToString("D4"))</div>
+                            <div class="text-muted fw-medium"><i class="fas fa-user-circle me-1"></i> @o.CustomerName</div>
+                        </td>
+                        <td class="fw-medium text-secondary">@o.OrderDate.ToString("dd/MM/yyyy HH:mm")</td>
+                        <td><div class="fw-bold text-success fs-5">@o.TotalAmount.ToString("N0") đ</div></td>
+                        <td>
+                            @if (o.Status == "Chờ xác nhận")
+                            {
+                                <span class="badge bg-warning text-dark px-3 py-2 rounded-pill shadow-sm"><i class="fas fa-clock me-1"></i> Chờ Xác Nhận</span>
+                            }
+                            else if (o.Status == "Đang đóng gói" || o.Status == "Đang xử lý")
+                            {
+
+                                <span class="badge bg-info text-dark px-3 py-2 rounded-pill shadow-sm"><i class="fas fa-box-open me-1"></i> Đang Đóng Gói</span>
+                            }
+                            else if (o.Status == "Đang giao hàng")
+                            {
+
+                                <span class="badge bg-primary px-3 py-2 rounded-pill shadow-sm"><i class="fas fa-truck me-1"></i> Đang Giao</span>
+                            }
+                            else if (o.Status == "Hoàn thành" || o.Status == "Đã hoàn tất")
+                            {
+
+                                <span class="badge bg-success px-3 py-2 rounded-pill shadow-sm"><i class="fas fa-check-circle me-1"></i> Hoàn Thành</span>
+                            }
+                            else
+                            {
+
+                                <span class="badge bg-danger px-3 py-2 rounded-pill shadow-sm"><i class="fas fa-times-circle me-1"></i> Đã Hủy</span>
+                            }
+                        </td>
+                        <td class="pe-4">
+                            <button class="btn btn-sm rounded-pill px-4 fw-bold shadow-sm @(o.Status == "Hoàn thành" || o.Status == "Đã hủy" ? "btn-light text-muted border" : "btn-outline-primary")" @onclick="() => ViewDetail(o)">
+                                @(o.Status == "Hoàn thành" || o.Status == "Đã hủy" ? "Xem" : "Xử lý")
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@if (selectedOrder != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.6);">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content rounded-4 border-0 shadow-lg">
+                <div class="modal-header text-white p-4" style="background: linear-gradient(135deg, #6c5ce7, #a29bfe);">
+                    <h5 class="fw-bold mb-0"><i class="fas fa-file-invoice me-2"></i> Tiến Trình Đơn Hàng #ORD-@(selectedOrder.OrderId.ToString("D4"))</h5>
+                    <button class="btn-close btn-close-white" @onclick="() => selectedOrder = null"></button>
+                </div>
+                <div class="modal-body p-5 bg-white">
+
+                    @if (selectedOrder.Status == "Đã hủy")
+                    {
+                        <div class="alert alert-danger text-center fw-bold fs-5 rounded-4"><i class="fas fa-times-circle me-2"></i> Đơn hàng này đã bị hủy</div>
+                    }
+                    else
+                    {
+                        <!-- TIMELINE UI TIẾNG VIỆT -->
+                        <div class="position-relative mb-5 mt-3">
+                            <div class="progress position-absolute top-50 translate-middle-y w-100" style="height: 4px; z-index: 1;">
+                                <div class="progress-bar bg-success" style="width: @(selectedOrder.Status == "Hoàn thành" ? "100" : (selectedOrder.Status == "Đang giao hàng" ? "66" : (selectedOrder.Status == "Đang đóng gói" || selectedOrder.Status == "Đang xử lý" ? "33" : "0")))%; transition: 0.5s;"></div>
+                            </div>
+                            <div class="d-flex justify-content-between position-relative" style="z-index: 2;">
+                                <div class="text-center">
+                                    <div class="bg-success text-white rounded-circle d-flex align-items-center justify-content-center shadow mx-auto" style="width:45px; height:45px;"><i class="fas fa-file-alt"></i></div>
+                                    <div class="mt-2 fw-bold text-success small text-uppercase">Đã Tạo</div>
+                                </div>
+                                <div class="text-center">
+                                    <div class="@(selectedOrder.Status != "Chờ xác nhận" ? "bg-success text-white" : "bg-white text-muted border border-2") rounded-circle d-flex align-items-center justify-content-center shadow mx-auto" style="width:45px; height:45px; transition: 0.5s;"><i class="fas fa-box-open"></i></div>
+                                    <div class="mt-2 fw-bold @(selectedOrder.Status != "Chờ xác nhận" ? "text-success" : "text-muted") small text-uppercase">Đóng Gói</div>
+                                </div>
+                                <div class="text-center">
+                                    <div class="@(selectedOrder.Status == "Đang giao hàng" || selectedOrder.Status == "Hoàn thành" ? "bg-success text-white" : "bg-white text-muted border border-2") rounded-circle d-flex align-items-center justify-content-center shadow mx-auto" style="width:45px; height:45px; transition: 0.5s;"><i class="fas fa-truck"></i></div>
+                                    <div class="mt-2 fw-bold @(selectedOrder.Status == "Đang giao hàng" || selectedOrder.Status == "Hoàn thành" ? "text-success" : "text-muted") small text-uppercase">Đang Giao</div>
+                                </div>
+                                <div class="text-center">
+                                    <div class="@(selectedOrder.Status == "Hoàn thành" ? "bg-success text-white" : "bg-white text-muted border border-2") rounded-circle d-flex align-items-center justify-content-center shadow mx-auto" style="width:45px; height:45px; transition: 0.5s;"><i class="fas fa-check"></i></div>
+                                    <div class="mt-2 fw-bold @(selectedOrder.Status == "Hoàn thành" ? "text-success" : "text-muted") small text-uppercase">Hoàn Thành</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-3 justify-content-center mt-4 border-top pt-4">
+                            @if (selectedOrder.Status == "Chờ xác nhận")
+                            {
+                                <button class="btn btn-info px-5 btn-lg rounded-pill fw-bold text-dark shadow" @onclick='() => ChangeStatus("Đang đóng gói")'><i class="fas fa-box me-2"></i> Xác nhận Đóng gói</button>
+                            }
+                            else if (selectedOrder.Status == "Đang đóng gói" || selectedOrder.Status == "Đang xử lý")
+                            {
+
+                                <button class="btn btn-primary px-5 btn-lg rounded-pill fw-bold shadow" @onclick='() => ChangeStatus("Đang giao hàng")'><i class="fas fa-motorcycle me-2"></i> Giao cho Shipper</button>
+                            }
+                            else if (selectedOrder.Status == "Đang giao hàng")
+                            {
+
+                                <button class="btn btn-success px-5 btn-lg rounded-pill fw-bold shadow" @onclick='() => ChangeStatus("Hoàn thành")'><i class="fas fa-check-double me-2"></i> Đã Giao Thành Công</button>
+                            }
+
+                            <!-- Chỉ được hủy khi chưa giao -->
+                            @if (selectedOrder.Status == "Chờ xác nhận" || selectedOrder.Status == "Đang đóng gói" || selectedOrder.Status == "Đang xử lý")
+                            {
+                                <button class="btn btn-outline-danger px-4 btn-lg rounded-pill fw-bold shadow-sm" @onclick='() => ChangeStatus("Đã hủy")'>Hủy Đơn</button>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    public class OrderDto { public int OrderId { get; set; } public string CustomerName { get; set; } = ""; public DateTime OrderDate { get; set; } public decimal TotalAmount { get; set; } public string Status { get; set; } = ""; }
+    private List<OrderDto>? orders;
+    private OrderDto? selectedOrder;
+
+    private int pendingCount = 0;
+    private int shippingCount = 0;
+    private int cancelledCount = 0;
+
+    protected override async Task OnInitializedAsync() { await Load(); }
+
+    private async Task Load()
+    {
+        using var scope = ServiceProvider.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ShopPetDatabaseContext>();
+
+        var rawOrders = await db.Orders.AsNoTracking().Take(100).ToListAsync(); // Lấy data tĩnh
+        var custIds = rawOrders.Where(x => x.CustomerId.HasValue).Select(x => x.CustomerId!.Value).ToList();
+        var cDict = await db.Customers.Where(c => custIds.Contains(c.CustomerId)).ToDictionaryAsync(c => c.CustomerId, c => c.Name);
+
+        // THUẬT TOÁN SẮP XẾP: Việc cần làm nổi lên trên, Việc xong chìm xuống dưới
+        orders = rawOrders.Select(o => new OrderDto
+        {
+            OrderId = o.OrderId,
+            OrderDate = o.OrderDate,
+            TotalAmount = o.TotalAmount,
+            Status = o.Status ?? "Chờ xác nhận",
+            CustomerName = (o.CustomerId.HasValue && cDict.ContainsKey(o.CustomerId.Value)) ? cDict[o.CustomerId.Value] ?? "Khách lẻ" : "Khách lẻ"
+        })
+        .OrderBy(o => GetSortWeight(o.Status))
+        .ThenByDescending(o => o.OrderDate)
+        .ToList();
+
+        pendingCount = orders.Count(o => o.Status == "Chờ xác nhận" || o.Status == "Đang đóng gói" || o.Status == "Đang xử lý");
+        shippingCount = orders.Count(o => o.Status == "Đang giao hàng");
+        cancelledCount = orders.Count(o => o.Status == "Đã hủy");
+    }
+
+    private int GetSortWeight(string status)
+    {
+        if (status == "Chờ xác nhận") return 1;
+        if (status == "Đang đóng gói" || status == "Đang xử lý") return 2;
+        if (status == "Đang giao hàng") return 3;
+        return 4; // Hoàn thành, Đã hủy rớt xuống đáy
+    }
+
+    private void ViewDetail(OrderDto o) { selectedOrder = o; }
+
+    private async Task ChangeStatus(string st)
+    {
+        if (selectedOrder != null)
+        {
+            using var scope = ServiceProvider.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ShopPetDatabaseContext>();
+            await db.Database.ExecuteSqlRawAsync("UPDATE [Order] SET status = {0} WHERE order_id = {1}", st, selectedOrder.OrderId);
+            selectedOrder = null;
+            await Load();
+            StateHasChanged();
+        }
+    }
+}

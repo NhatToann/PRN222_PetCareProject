@@ -1,0 +1,278 @@
+﻿@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Routing
+@using PetShop.Data
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceProvider ServiceProvider
+@inject NavigationManager Navigation
+@implements IDisposable
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+<div class="fox-wrapper">
+    <nav class="fox-sidebar shadow d-none d-lg-flex" id="sidebar">
+        <div class="sidebar-header text-center p-4 border-bottom border-secondary">
+            <div class="logo d-flex align-items-center justify-content-center w-100">
+                <i class="fas fa-paw fs-2 me-2 text-warning"></i>
+                <span class="fw-bold text-white fs-4 tracking-wide">PET STAFF</span>
+            </div>
+        </div>
+        <div class="sidebar-menu mt-3 pb-5">
+            <div class="menu-title">TỔNG QUAN</div>
+            <NavLink href="/system" class="menu-item" Match="NavLinkMatch.All"><i class="fas fa-chart-pie"></i> Bảng điều khiển</NavLink>
+            <NavLink href="/revenue" class="menu-item"><i class="fas fa-chart-line"></i> Báo cáo doanh thu</NavLink>
+
+            <div class="menu-title mt-4">QUẢN LÝ ĐƠN HÀNG</div>
+            <NavLink href="/system/orders" class="menu-item"><i class="fas fa-shopping-cart"></i> Danh sách đơn hàng</NavLink>
+
+            <div class="menu-title mt-4">DỊCH VỤ SPA</div>
+            <NavLink href="/system/bookings" class="menu-item"><i class="fas fa-calendar-check"></i> Lịch hẹn Spa</NavLink>
+
+            <div class="menu-title mt-4">CỬA HÀNG & KHO</div>
+            <NavLink href="/products/list" class="menu-item"><i class="fas fa-box"></i> Danh sách sản phẩm</NavLink>
+            <NavLink href="/products/inventory" class="menu-item"><i class="fas fa-warehouse"></i> Quản lý tồn kho</NavLink>
+
+            <div class="menu-title mt-4">NHÂN VIÊN</div>
+            <NavLink href="/system/schedule" class="menu-item"><i class="fas fa-clock"></i> Lịch trực cá nhân</NavLink>
+        </div>
+    </nav>
+
+    <div class="fox-main">
+        <header class="fox-topbar shadow-sm">
+            <div class="container-fluid d-flex justify-content-between align-items-center h-100 px-4">
+                <div class="d-flex align-items-center gap-3">
+                    <button class="btn btn-light d-lg-none border"><i class="fas fa-bars"></i></button>
+                    <!-- BREADCRUMB ĐỘNG -->
+                    <div class="d-none d-md-flex align-items-center text-muted fw-bold breadcrumb-container">
+                        <a href="/system" class="breadcrumb-link"><i class="fas fa-home me-1"></i> Dashboard</a>
+                        <i class="fas fa-chevron-right mx-2 text-secondary" style="font-size: 10px;"></i>
+                        <span class="text-dark">@currentMenu</span>
+                    </div>
+                </div>
+
+                <div class="d-flex align-items-center gap-4">
+                    <!-- TIMER ĐẾM NGƯỢC -->
+                    <div class="badge bg-light text-dark px-3 py-2 border shadow-sm fs-6 rounded-pill d-none d-md-block" style="min-width: 150px;">
+                        <i class="fas fa-sync-alt me-2 text-primary @(countdown == 30 ? "fa-spin" : "")"></i> Làm mới: <span class="text-primary fw-bold">@countdown s</span>
+                    </div>
+
+                    <!-- AVATAR DROPDOWN -->
+                    <div class="dropdown">
+                        <div class="d-flex align-items-center gap-2" data-bs-toggle="dropdown" style="cursor: pointer;">
+                            <div class="text-end d-none d-md-block">
+                                <div class="fw-bold text-dark" style="font-size: 1rem;">@staffName</div>
+                                <div class="d-flex align-items-center justify-content-end gap-1 text-success fw-bold" style="font-size: 0.8rem;">
+                                    <i class="fas fa-circle" style="font-size: 8px;"></i> Đang hoạt động
+                                </div>
+                            </div>
+                            <div class="avatar-circle"><span class="fw-bold text-white fs-5">@staffInitials</span></div>
+                        </div>
+                        <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-2 rounded-4">
+                            <li><a class="dropdown-item py-2 fw-bold text-secondary" href="/system/profile"><i class="fas fa-user-circle me-2"></i> Hồ sơ của tôi</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item py-2 fw-bold text-danger" href="/"><i class="fas fa-sign-out-alt me-2"></i> Đăng xuất</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </header>
+        <main class="fox-content p-4 p-md-5">
+            @Body
+        </main>
+    </div>
+</div>
+
+<style>
+    a {
+        text-decoration: none !important;
+    }
+
+    .fox-sidebar a {
+        text-decoration: none !important;
+    }
+
+    /* STYLE BREADCRUMB */
+    .breadcrumb-link {
+        color: #64748b;
+        transition: 0.2s ease;
+    }
+
+        .breadcrumb-link:hover {
+            color: #6c5ce7 !important;
+            text-decoration: none;
+        }
+
+    :root {
+        --fox-dark: #1e1e2f;
+        --fox-purple: #6c5ce7;
+        --fox-bg: #f4f7fb;
+    }
+
+    html, body {
+        background-color: var(--fox-bg);
+        font-family: 'Segoe UI', system-ui, sans-serif;
+        margin: 0;
+        padding: 0;
+    }
+
+    .fox-wrapper {
+        display: flex;
+        min-height: 100vh;
+        background-color: var(--fox-bg);
+    }
+
+    .fox-sidebar {
+        width: 260px;
+        background-color: var(--fox-dark);
+        color: #94a3b8;
+        display: flex;
+        flex-direction: column;
+        flex-shrink: 0;
+        z-index: 1000;
+    }
+
+    .menu-title {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        font-weight: 700;
+        padding: 0 25px;
+        margin-bottom: 8px;
+        color: #64748b;
+    }
+
+    .menu-item {
+        padding: 12px 25px;
+        color: #cbd5e1;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        font-weight: 600;
+        font-size: 1rem;
+        transition: all 0.2s ease;
+        border-left: 4px solid transparent;
+    }
+
+        .menu-item:hover, .menu-item.active {
+            background-color: rgba(108, 92, 231, 0.15);
+            color: #ffffff;
+            border-left-color: var(--fox-purple);
+            font-weight: 700;
+        }
+
+        .menu-item i {
+            width: 24px;
+            font-size: 1.1rem;
+            text-align: center;
+            color: #64748b;
+        }
+
+        .menu-item:hover i, .menu-item.active i {
+            color: var(--fox-purple);
+        }
+
+    .fox-main {
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+    }
+
+    .fox-topbar {
+        height: 75px;
+        background-color: #ffffff;
+        z-index: 999;
+    }
+
+    .fox-content {
+        flex-grow: 1;
+        overflow-y: auto;
+        padding-bottom: 50px !important;
+    }
+
+    .avatar-circle {
+        width: 45px;
+        height: 45px;
+        background: linear-gradient(135deg, var(--fox-purple), #a29bfe);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 10px rgba(108, 92, 231, 0.3);
+    }
+
+    .fox-card {
+        background: #ffffff;
+        border-radius: 16px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+        border: 1px solid #e2e8f0;
+        padding: 24px;
+        margin-bottom: 24px;
+    }
+
+    .fox-table th {
+        background-color: #f8fafc;
+        color: #475569;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border-bottom: 2px solid #e2e8f0 !important;
+    }
+
+    .fox-table td {
+        vertical-align: middle;
+        border-bottom: 1px solid #f1f5f9;
+    }
+</style>
+
+@code {
+    private string staffName = "Phan Gia Hưng";
+    private string staffInitials = "PH";
+    private string currentMenu = "Bảng điều khiển";
+    private int countdown = 30;
+    private System.Threading.Timer? timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        UpdateBreadcrumb(Navigation.Uri);
+        Navigation.LocationChanged += (s, e) => { UpdateBreadcrumb(e.Location); InvokeAsync(StateHasChanged); };
+
+        timer = new System.Threading.Timer(async _ =>
+        {
+            countdown--;
+            if (countdown <= 0) { countdown = 30; }
+            await InvokeAsync(StateHasChanged);
+        }, null, 0, 1000);
+
+        try
+        {
+            using var scope = ServiceProvider.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ShopPetDatabaseContext>();
+            var staff = await db.Customers.AsNoTracking().FirstOrDefaultAsync(c => c.CustomerId == 2);
+            if (staff != null && !string.IsNullOrWhiteSpace(staff.Name))
+            {
+                staffName = staff.Name;
+                var parts = staffName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                staffInitials = parts.Length == 1 ? parts[0].Substring(0, Math.Min(2, parts[0].Length)).ToUpper() : (parts[0].Substring(0, 1) + parts[^1].Substring(0, 1)).ToUpper();
+            }
+        }
+        catch { }
+    }
+
+    private void UpdateBreadcrumb(string url)
+    {
+        if (url.Contains("/revenue")) currentMenu = "Báo cáo doanh thu";
+        else if (url.Contains("/system/orders")) currentMenu = "Quản lý đơn hàng";
+        else if (url.Contains("/system/bookings")) currentMenu = "Lịch hẹn Spa";
+        else if (url.Contains("/products/list")) currentMenu = "Danh sách sản phẩm";
+        else if (url.Contains("/products/inventory")) currentMenu = "Quản lý tồn kho";
+        else if (url.Contains("/system/schedule")) currentMenu = "Lịch trực cá nhân";
+        else if (url.Contains("/system/profile")) currentMenu = "Hồ sơ của tôi";
+        else currentMenu = "Bảng điều khiển";
+    }
+
+    public void Dispose() { timer?.Dispose(); Navigation.LocationChanged -= (s, e) => { }; }
+}

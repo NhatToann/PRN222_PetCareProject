@@ -1,0 +1,111 @@
+﻿@page "/products/create"
+@layout PetShop_PRN222.Components.Layout.StaffWorkspaceLayout
+@rendermode InteractiveServer
+@using PetShop.Data
+@using PetShop.Models
+@using System.IO
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceProvider ServiceProvider
+@inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment Environment
+
+<PageTitle>Thêm Sản Phẩm Mới</PageTitle>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="fw-bold mb-1 text-dark">Thêm Sản Phẩm Mới</h2>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-xl-8">
+        <div class="fox-card p-5 border-0 shadow-sm">
+            @if (!string.IsNullOrEmpty(successMessage))
+            {
+                <div class="alert alert-success d-flex align-items-center mb-4 fs-5 rounded-4 shadow-sm"><i class="fas fa-check-circle me-3 fs-3"></i> @successMessage</div>
+            }
+
+            <EditForm Model="@newProduct" OnValidSubmit="SaveProduct">
+                <DataAnnotationsValidator />
+                <div class="row g-4">
+                    <div class="col-md-12">
+                        <label class="form-label fw-bold text-secondary mb-2">Tên sản phẩm <span class="text-danger">*</span></label>
+                        <InputText @bind-Value="newProduct.Name" class="form-control form-control-lg bg-light border-0" required />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-secondary mb-2">Giá bán (VNĐ) <span class="text-danger">*</span></label>
+                        <InputNumber @bind-Value="newProduct.Price" class="form-control form-control-lg bg-light border-0" required />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-secondary mb-2">Số lượng tồn kho <span class="text-danger">*</span></label>
+                        <InputNumber @bind-Value="newProduct.StockQuantity" class="form-control form-control-lg bg-light border-0" required />
+                    </div>
+
+                    <div class="col-md-12">
+                        <label class="form-label fw-bold text-secondary mb-2">Mô tả chi tiết</label>
+                        <InputTextArea @bind-Value="newProduct.Description" class="form-control form-control-lg bg-light border-0" rows="4"></InputTextArea>
+                    </div>
+                </div>
+                <div class="text-end mt-5 pt-4 border-top">
+                    <button type="submit" class="btn btn-primary btn-lg rounded-pill px-5 fw-bold shadow border-0" style="background: linear-gradient(135deg, #3b82f6, #2563eb);">
+                        <i class="fas fa-save me-2"></i> Lưu Sản Phẩm
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+
+    <div class="col-xl-4">
+        <div class="fox-card p-4 border-0 shadow-sm">
+            <h5 class="fw-bold text-dark border-bottom pb-3 mb-4"><i class="fas fa-image me-2 text-primary"></i> Hình Ảnh</h5>
+            <div class="text-center mb-4">
+                @if (!string.IsNullOrEmpty(newProduct.ImageUrl))
+                {
+                    <img src="@newProduct.ImageUrl" class="img-fluid rounded-4 shadow-sm w-100" style="max-height: 220px; object-fit: cover;" />
+                }
+            </div>
+            <InputFile OnChange="HandleImageUpload" class="form-control form-control-lg shadow-sm" accept="image/*" />
+        </div>
+    </div>
+</div>
+
+@code {
+    private Product newProduct = new Product { IsDeleted = false, StockQuantity = 10, Price = 50000 };
+    private string successMessage = "";
+
+    private async Task HandleImageUpload(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file != null)
+        {
+            var uploadsFolder = Path.Combine(Environment.WebRootPath, "images");
+            if (!Directory.Exists(uploadsFolder)) Directory.CreateDirectory(uploadsFolder);
+            var fileName = $"{Guid.NewGuid()}_{file.Name}";
+            var filePath = Path.Combine(uploadsFolder, fileName);
+            using (var fileStream = new FileStream(filePath, FileMode.Create))
+            {
+                await file.OpenReadStream(5242880).CopyToAsync(fileStream);
+            }
+            newProduct.ImageUrl = $"/images/{fileName}";
+        }
+    }
+
+    private async Task SaveProduct()
+    {
+        using var scope = ServiceProvider.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ShopPetDatabaseContext>();
+
+        if (string.IsNullOrEmpty(newProduct.ImageUrl))
+            newProduct.ImageUrl = "https://ui-avatars.com/api/?name=Product&background=3b82f6&color=fff&size=250";
+
+        // SQL THUẦN LÀ CHÂN ÁI: Đẩy thẳng vào DB, EF Core không có cơ hội bắt lỗi Ngày Tháng
+        string sql = "INSERT INTO Products (name, price, stock_quantity, description, image_url, is_deleted) VALUES (@p0, @p1, @p2, @p3, @p4, 0)";
+        await db.Database.ExecuteSqlRawAsync(sql, newProduct.Name, newProduct.Price, newProduct.StockQuantity, newProduct.Description ?? "", newProduct.ImageUrl);
+
+        successMessage = $"Thêm sản phẩm '{newProduct.Name}' thành công!";
+        newProduct = new Product { IsDeleted = false, StockQuantity = 10, Price = 50000 };
+        StateHasChanged();
+    }
+}

@@ -2,6 +2,9 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
+using PetShop.Interfaces;
+using PetShop.Repositories;
+using PetShop.Services;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -75,6 +78,9 @@ builder.Services.AddHttpClient<PetShop.Interfaces.IPetsClient, PetShop.Services.
     .AddHttpMessageHandler<PetShop.Services.SpaAuthHeaderHandler>();
 builder.Services.AddScoped<PetShop.Services.UserSessionService>();
 builder.Services.AddScoped<PetShop.Services.CartStateService>();
+builder.Services.AddScoped<IStaffRepository, StaffRepository>();
+builder.Services.AddScoped<IStaffService, StaffService>();
+builder.Services.AddScoped<IStaffDashboardService, StaffDashboardService>();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>

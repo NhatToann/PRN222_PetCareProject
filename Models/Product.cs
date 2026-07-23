@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema; // FIX: Phải gọi thư viện Schema
 
 namespace PetShop.Models
 {
@@ -22,6 +23,9 @@ namespace PetShop.Models
         public int? AdminId { get; set; }
 
         public string? ImageUrl { get; set; }
+
+        [Column("is_deleted")]
+        public bool IsDeleted { get; set; }
 
         public virtual Admin? Admin { get; set; }
 
