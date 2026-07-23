@@ -40,5 +40,11 @@ window.blazorAuth = (function () {
         }
     }
 
-    return { initGoogle, promptGoogle };
+    function scrollToBottom(element) {
+        if (element) {
+            element.scrollTop = element.scrollHeight;
+        }
+    }
+
+    return { initGoogle, promptGoogle, scrollToBottom };
 })();

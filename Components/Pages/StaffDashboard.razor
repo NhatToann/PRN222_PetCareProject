@@ -1,0 +1,681 @@
+@page "/system"
+@using PetShop.Models
+@inject NavigationManager Navigation
+@inject UserSessionService UserSession
+@inject PetShop.Interfaces.IChatClient ChatClient
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Staff Dashboard - PetCare</PageTitle>
+
+<div class="staff-dashboard">
+    <header class="dashboard-header">
+        <div class="header-left">
+            <h1>Hỗ trợ khách hàng</h1>
+            <span class="welcome-text">Xin chào, @StaffName</span>
+        </div>
+        <div class="header-right">
+            <button class="btn-logout" @onclick="HandleLogout">Đăng xuất</button>
+        </div>
+    </header>
+
+    <div class="dashboard-content">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>Cuộc trò chuyện</h2>
+                <span class="badge" hidden="@(TotalUnread == 0)">@TotalUnread</span>
+            </div>
+
+            <nav class="staff-nav">
+                <a href="/system" class="staff-nav-item active">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+                    Hỗ trợ khách hàng
+                </a>
+                <a href="/staff/boarding" class="staff-nav-item">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-2 .9-2 2v16c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 18H5V9h14v12zM5 7V5h14v2H5z"/></svg>
+                    Lịch đặt phòng lưu trú
+                </a>
+            </nav>
+
+            <div class="search-box">
+                <input type="text" placeholder="Tìm kiếm khách hàng..." @bind="SearchTerm" @bind:event="oninput" />
+            </div>
+
+            <div class="conversations-list">
+                @if (IsLoadingConversations)
+                {
+                    <div class="loading-state">
+                        <div class="spinner"></div>
+                        <span>Đang tải...</span>
+                    </div>
+                }
+                else if (!FilteredConversations.Any())
+                {
+                    <div class="empty-state">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4.414A2 2 0 0 0 3 11.586l-2 2V2a1 1 0 0 1 1-1h12zM2 0a2 2 0 0 0-2 2v12.793a.5.5 0 0 0 .854.353l2.853-2.853A1 1 0 0 1 4.414 12H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H2z"/>
+                        </svg>
+                        <p>Không có cuộc trò chuyện nào</p>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var conv in FilteredConversations)
+                    {
+                        <div class="conversation-item @(SelectedCustomerId == conv.CustomerId ? "active" : "") @(conv.UnreadCount > 0 ? "unread" : "")"
+                             @onclick="() => SelectConversation(conv.CustomerId)">
+                            <div class="conv-avatar">
+                                @(conv.CustomerName?.FirstOrDefault().ToString().ToUpper() ?? "?")
+                            </div>
+                            <div class="conv-info">
+                                <div class="conv-name">@(conv.CustomerName ?? "Khách hàng #" + conv.CustomerId)</div>
+                                <div class="conv-preview">@(conv.LastMessage ?? "Chưa có tin nhắn")</div>
+                            </div>
+                            <div class="conv-meta">
+                                <span class="conv-time">@(FormatTime(conv.LastMessageAt))</span>
+                                @if (conv.UnreadCount > 0)
+                                {
+                                    <span class="unread-badge-small">@conv.UnreadCount</span>
+                                }
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        </aside>
+
+        <main class="chat-area">
+            @if (SelectedCustomerId == null)
+            {
+                <div class="no-chat-selected">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4.414A2 2 0 0 0 3 11.586l-2 2V2a1 1 0 0 1 1-1h12zM2 0a2 2 0 0 0-2 2v12.793a.5.5 0 0 0 .854.353l2.853-2.853A1 1 0 0 1 4.414 12H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H2z"/>
+                    </svg>
+                    <h3>Chọn một cuộc trò chuyện</h3>
+                    <p>Chọn cuộc trò chuyện từ danh sách bên trái để bắt đầu hỗ trợ khách hàng</p>
+                </div>
+            }
+            else
+            {
+                <div class="chat-header">
+                    <div class="chat-user-info">
+                        <div class="chat-avatar">
+                            @(SelectedCustomerName?.FirstOrDefault().ToString().ToUpper() ?? "?")
+                        </div>
+                        <div>
+                            <div class="chat-user-name">@(SelectedCustomerName ?? "Khách hàng #" + SelectedCustomerId)</div>
+                            <div class="chat-user-status">@(SelectedMessages?.Count ?? 0) tin nhắn</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="messages-container" @ref="MessagesContainer">
+                    @if (IsLoadingMessages)
+                    {
+                        <div class="loading-messages">
+                            <div class="spinner"></div>
+                            <span>Đang tải tin nhắn...</span>
+                        </div>
+                    }
+                    else if (SelectedMessages == null || !SelectedMessages.Any())
+                    {
+                        <div class="no-messages">
+                            <p>Chưa có tin nhắn nào. Hãy bắt đầu cuộc trò chuyện!</p>
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var message in SelectedMessages)
+                        {
+                            var isFromStaff = message.SenderType == "Staff";
+                            <div class="message @(isFromStaff ? "message-staff" : "message-customer")">
+                                <div class="message-content">
+                                    <div class="message-sender">@(isFromStaff ? "Bạn" : message.CustomerName ?? "Khách hàng")</div>
+                                    <div class="message-text">@message.Message</div>
+                                    <div class="message-time">@message.SentAt.ToString("HH:mm, dd/MM/yyyy")</div>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+
+                <div class="message-input-area">
+                    <textarea 
+                        placeholder="Nhập tin nhắn trả lời..."
+                        @bind="ReplyMessage"
+                        @bind:event="oninput"
+                        @onkeydown="HandleKeyDown"
+                        rows="2"
+                        disabled="@IsSending">
+                    </textarea>
+                    <button class="btn-send" @onclick="SendReply" disabled="@(IsSending || string.IsNullOrWhiteSpace(ReplyMessage))">
+                        @(IsSending ? "Đang gửi..." : "Gửi")
+                    </button>
+                </div>
+            }
+        </main>
+    </div>
+</div>
+
+@code {
+    private string StaffName = "Staff";
+    private List<ConversationSummaryDto> Conversations = new();
+    private List<ConversationSummaryDto> FilteredConversations => string.IsNullOrWhiteSpace(SearchTerm)
+        ? Conversations
+        : Conversations.Where(c => (c.CustomerName ?? "").Contains(SearchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
+    private int? SelectedCustomerId { get; set; }
+    private string? SelectedCustomerName { get; set; }
+    private List<ChatMessageDto>? SelectedMessages { get; set; }
+    private string SearchTerm = "";
+    private string ReplyMessage = "";
+    private bool IsLoadingConversations = true;
+    private bool IsLoadingMessages;
+    private bool IsSending;
+    private int TotalUnread => Conversations.Sum(c => c.UnreadCount);
+    private ElementReference MessagesContainer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await UserSession.LoadAsync();
+        if (!UserSession.IsAuthenticated)
+        {
+            Navigation.NavigateTo("/login", forceLoad: true);
+            return;
+        }
+
+        StaffName = UserSession.CurrentUser?.Email ?? "Staff";
+        await LoadConversationsAsync();
+    }
+
+    private async Task LoadConversationsAsync()
+    {
+        IsLoadingConversations = true;
+        try
+        {
+            var result = await ChatClient.GetConversationsAsync();
+            if (result.IsSuccess && result.Data != null)
+            {
+                Conversations = result.Data.ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading conversations: {ex.Message}");
+        }
+        finally
+        {
+            IsLoadingConversations = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SelectConversation(int customerId)
+    {
+        if (SelectedCustomerId == customerId) return;
+        
+        SelectedCustomerId = customerId;
+        IsLoadingMessages = true;
+        StateHasChanged();
+
+        try
+        {
+            var result = await ChatClient.GetConversationAsync(customerId);
+            if (result.IsSuccess && result.Data != null)
+            {
+                SelectedCustomerName = result.Data.CustomerName;
+                SelectedMessages = result.Data.Messages?.ToList() ?? new();
+                
+                // Mark as read
+                await ChatClient.MarkAsReadAsync(customerId);
+                
+                await LoadConversationsAsync(); // Refresh to update unread counts
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading messages: {ex.Message}");
+        }
+        finally
+        {
+            IsLoadingMessages = false;
+            StateHasChanged();
+            await ScrollToBottom();
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await SendReply();
+        }
+    }
+
+    private async Task SendReply()
+    {
+        if (SelectedCustomerId == null || string.IsNullOrWhiteSpace(ReplyMessage) || IsSending) return;
+
+        IsSending = true;
+        StateHasChanged();
+
+        try
+        {
+            var staffId = int.TryParse(UserSession.CurrentUser?.UserId.ToString(), out var id) ? id : 1;
+            var result = await ChatClient.SendStaffReplyAsync(SelectedCustomerId!.Value, staffId, ReplyMessage.Trim());
+            
+            if (result.IsSuccess && result.Data != null)
+            {
+                SelectedMessages ??= new();
+                SelectedMessages.Add(result.Data);
+                ReplyMessage = "";
+                await ScrollToBottom();
+                await LoadConversationsAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error sending reply: {ex.Message}");
+        }
+        finally
+        {
+            IsSending = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ScrollToBottom()
+    {
+        await Task.Delay(100);
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("blazorAuth.scrollToBottom", MessagesContainer);
+        }
+        catch { }
+    }
+
+    private string FormatTime(DateTime? time)
+    {
+        if (!time.HasValue) return "";
+        var now = DateTime.Now;
+        if (time.Value.Date == now.Date) return time.Value.ToString("HH:mm");
+        if (time.Value.Date == now.Date.AddDays(-1)) return "Hôm qua";
+        return time.Value.ToString("dd/MM");
+    }
+
+    private async Task HandleLogout()
+    {
+        await UserSession.SignOutAsync();
+        Navigation.NavigateTo("/login", forceLoad: true);
+    }
+}
+
+<style>
+    .staff-dashboard {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        background: #f5f5f5;
+    }
+
+    .dashboard-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 2rem;
+        background: #2c3e50;
+        color: white;
+    }
+
+    .header-left h1 {
+        margin: 0;
+        font-size: 1.5rem;
+    }
+
+    .welcome-text {
+        font-size: 0.9rem;
+        opacity: 0.8;
+    }
+
+    .btn-logout {
+        padding: 0.5rem 1rem;
+        background: #e74c3c;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .btn-logout:hover {
+        background: #c0392b;
+    }
+
+    .dashboard-content {
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+    }
+
+    .sidebar {
+        width: 350px;
+        background: white;
+        border-right: 1px solid #ddd;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .sidebar-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 1rem;
+        border-bottom: 1px solid #eee;
+    }
+
+    .sidebar-header h2 {
+        margin: 0;
+        font-size: 1.1rem;
+    }
+
+    .badge {
+        background: #e74c3c;
+        color: white;
+        padding: 0.2rem 0.5rem;
+        border-radius: 10px;
+        font-size: 0.8rem;
+    }
+
+    .search-box {
+        padding: 0.75rem 1rem;
+    }
+
+    .staff-nav {
+        display: flex;
+        flex-direction: column;
+        padding: 0.5rem 0.75rem;
+        gap: 0.25rem;
+        border-bottom: 1px solid #eee;
+    }
+
+    .staff-nav-item {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        padding: 0.6rem 0.85rem;
+        border-radius: 8px;
+        color: #4a5568;
+        text-decoration: none;
+        font-size: 0.92rem;
+        font-weight: 500;
+        transition: all 0.15s;
+    }
+    .staff-nav-item:hover {
+        background: #eef0f7;
+        color: #667eea;
+    }
+    .staff-nav-item.active {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+    .staff-nav-item svg { flex-shrink: 0; }
+
+    .search-box input {
+        width: 100%;
+        padding: 0.5rem;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+
+    .conversations-list {
+        flex: 1;
+        overflow-y: auto;
+    }
+
+    .loading-state, .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        color: #888;
+    }
+
+    .conversation-item {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        cursor: pointer;
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    .conversation-item:hover {
+        background: #f8f8f8;
+    }
+
+    .conversation-item.active {
+        background: #e8f4fd;
+    }
+
+    .conversation-item.unread .conv-name {
+        font-weight: bold;
+    }
+
+    .conv-avatar {
+        width: 45px;
+        height: 45px;
+        background: #3498db;
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+        font-weight: bold;
+    }
+
+    .conv-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .conv-name {
+        font-weight: 500;
+        margin-bottom: 0.2rem;
+    }
+
+    .conv-preview {
+        font-size: 0.85rem;
+        color: #888;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .conv-meta {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 0.25rem;
+    }
+
+    .conv-time {
+        font-size: 0.75rem;
+        color: #888;
+    }
+
+    .unread-badge-small {
+        background: #e74c3c;
+        color: white;
+        padding: 0.1rem 0.4rem;
+        border-radius: 10px;
+        font-size: 0.7rem;
+    }
+
+    .chat-area {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        background: #fafafa;
+    }
+
+    .no-chat-selected {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: #888;
+    }
+
+    .no-chat-selected svg {
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+
+    .chat-header {
+        padding: 1rem;
+        background: white;
+        border-bottom: 1px solid #ddd;
+        display: flex;
+        align-items: center;
+    }
+
+    .chat-user-info {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .chat-avatar {
+        width: 40px;
+        height: 40px;
+        background: #3498db;
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+    }
+
+    .chat-user-name {
+        font-weight: 500;
+    }
+
+    .chat-user-status {
+        font-size: 0.85rem;
+        color: #888;
+    }
+
+    .messages-container {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .loading-messages {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        color: #888;
+    }
+
+    .message {
+        display: flex;
+        max-width: 70%;
+    }
+
+    .message-customer {
+        align-self: flex-start;
+    }
+
+    .message-staff {
+        align-self: flex-end;
+    }
+
+    .message-content {
+        padding: 0.75rem 1rem;
+        border-radius: 12px;
+        position: relative;
+    }
+
+    .message-customer .message-content {
+        background: white;
+        border: 1px solid #ddd;
+    }
+
+    .message-staff .message-content {
+        background: #3498db;
+        color: white;
+    }
+
+    .message-sender {
+        font-size: 0.75rem;
+        opacity: 0.7;
+        margin-bottom: 0.25rem;
+    }
+
+    .message-text {
+        margin-bottom: 0.25rem;
+    }
+
+    .message-time {
+        font-size: 0.7rem;
+        opacity: 0.7;
+        text-align: right;
+    }
+
+    .message-input-area {
+        display: flex;
+        gap: 0.5rem;
+        padding: 1rem;
+        background: white;
+        border-top: 1px solid #ddd;
+    }
+
+    .message-input-area textarea {
+        flex: 1;
+        padding: 0.75rem;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        resize: none;
+        font-family: inherit;
+    }
+
+    .btn-send {
+        padding: 0.75rem 1.5rem;
+        background: #3498db;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 500;
+    }
+
+    .btn-send:hover:not(:disabled) {
+        background: #2980b9;
+    }
+
+    .btn-send:disabled {
+        background: #bdc3c7;
+        cursor: not-allowed;
+    }
+
+    .spinner {
+        width: 24px;
+        height: 24px;
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #3498db;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @@keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+</style>

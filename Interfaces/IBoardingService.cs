@@ -9,6 +9,8 @@ namespace PetShop.Interfaces
         Task<IReadOnlyList<BoardingBookingDto>> GetAllBookingsAsync(CancellationToken ct = default);
         Task<bool> ConfirmCheckinAsync(int bookingId, CancellationToken ct = default);
         Task<bool> ConfirmCheckoutAsync(int bookingId, CancellationToken ct = default);
+        Task<bool> RejectBookingAsync(int bookingId, string reason, CancellationToken ct = default);
         Task<IReadOnlyList<BoardingAvailabilityDto>> GetAvailabilityAsync(CancellationToken ct = default);
+        Task<BoardingCatalogDto> GetCatalogAsync(CancellationToken ct = default);
     }
 }

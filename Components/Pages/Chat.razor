@@ -1,0 +1,280 @@
+@page "/chat"
+@using PetShop.Interfaces
+@using PetShop.Models
+@inject IChatClient ChatClient
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@inject PetShop.Services.UserSessionService UserSession
+@implements IAsyncDisposable
+
+<PageTitle>Chat với chúng tôi</PageTitle>
+
+<div class="chat-container">
+    <div class="chat-header">
+        <div class="chat-header-info">
+            <div class="chat-avatar">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4zm-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10c-2.29 0-3.516.68-4.168 1.332-.678.678-.83 1.418-.832 1.664h10z"/>
+                </svg>
+            </div>
+            <div class="chat-header-text">
+                <h3>Hỗ trợ PetCare</h3>
+                <span class="status-indicator online"></span>
+                <span class="status-text">Đang trực tuyến</span>
+            </div>
+        </div>
+        <button class="chat-close-btn" @onclick="CloseChat" title="Đóng chat">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+            </svg>
+        </button>
+    </div>
+
+    @if (!IsAuthenticated)
+    {
+        <div class="chat-auth-prompt">
+            <div class="auth-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4zm-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10c-2.29 0-3.516.68-4.168 1.332-.678.678-.83 1.418-.832 1.664h10z"/>
+                </svg>
+            </div>
+            <h3>Vui lòng đăng nhập để chat</h3>
+            <p>Bạn cần đăng nhập để có thể nhắn tin hỗ trợ với chúng tôi.</p>
+            <button class="btn-primary" @onclick='() => Navigation.NavigateTo("/login?returnUrl=/chat")'>
+                Đăng nhập ngay
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="chat-messages" id="chatMessages">
+            @if (IsLoading)
+            {
+                <div class="chat-loading">
+                    <div class="spinner"></div>
+                    <span>Đang tải tin nhắn...</span>
+                </div>
+            }
+            else if (Messages.Any())
+            {
+                @foreach (var message in Messages)
+                {
+                    <div class="message @(message.SenderType == "Customer" ? "message-out" : "message-in")">
+                        <div class="message-bubble">
+                            <p>@message.Message</p>
+                            <span class="message-time">
+                                @FormatTime(message.SentAt)
+                                @if (message.SenderType == "Staff" && message.IsRead)
+                                {
+                                    <span class="message-status">✓</span>
+                                }
+                            </span>
+                        </div>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="chat-empty">
+                    <div class="empty-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4.414A2 2 0 0 0 3 11.586l-2 2V2a1 1 0 0 1 1-1h12zM2 0a2 2 0 0 0-2 2v12.793a.5.5 0 0 0 .854.353l2.853-2.853A1 1 0 0 1 4.414 12H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H2z"/>
+                            <path d="M3 3.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5zM3 6a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9A.5.5 0 0 1 3 6zm0 2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5z"/>
+                        </svg>
+                    </div>
+                    <p>Chưa có tin nhắn nào</p>
+                    <span>Gửi tin nhắn cho chúng tôi để được hỗ trợ!</span>
+                </div>
+            }
+        </div>
+
+        <div class="chat-input-area">
+            <textarea 
+                class="chat-input" 
+                @bind="NewMessage" 
+                @bind:event="oninput"
+                placeholder="Nhập tin nhắn..."
+                rows="1"
+                disabled="@IsSending">
+            </textarea>
+            <button 
+                class="send-btn @(string.IsNullOrWhiteSpace(NewMessage) ? "disabled" : "")" 
+                @onclick="SendMessage"
+                disabled="@(string.IsNullOrWhiteSpace(NewMessage) || IsSending)">
+                @if (IsSending)
+                {
+                    <span class="spinner-small"></span>
+                }
+                else
+                {
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M15.854.146a.5.5 0 0 1 .11.54l-5.819 14.547a.75.75 0 0 1-1.329.124l-3.178-4.995L.643 7.184a.75.75 0 0 1 .124-1.33L15.314.037a.5.5 0 0 1 .54.11ZM6.636 10.07l2.761 4.338L14.13 2.576 6.636 10.07Zm6.787-8.201L1.591 6.602l4.339 2.76 7.494-7.493Z"/>
+                    </svg>
+                }
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    private List<ChatMessageDto> Messages { get; set; } = new();
+    private string NewMessage { get; set; } = string.Empty;
+    private bool IsLoading { get; set; } = true;
+    private bool IsSending { get; set; } = false;
+    private bool IsAuthenticated { get; set; } = false;
+    private int _customerId = 0;
+    private CancellationTokenSource? _cts;
+    private bool _isFirstRender = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _cts = new CancellationTokenSource();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _isFirstRender)
+        {
+            _isFirstRender = false;
+            
+            try
+            {
+                await UserSession.LoadAsync();
+                if (UserSession.IsAuthenticated && UserSession.CurrentUser != null)
+                {
+                    _customerId = UserSession.CurrentUser.UserId;
+                    IsAuthenticated = true;
+                    await LoadMessages();
+                    _ = StartPolling();
+                }
+                else
+                {
+                    IsAuthenticated = false;
+                    IsLoading = false;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading session: {ex.Message}");
+                IsAuthenticated = false;
+                IsLoading = false;
+            }
+            StateHasChanged();
+        }
+    }
+
+    private async Task StartPolling()
+    {
+        while (!_cts!.Token.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(3000, _cts.Token);
+                if (!IsSending && IsAuthenticated && _customerId > 0)
+                {
+                    await LoadMessages(silent: true);
+                }
+            }
+            catch (TaskCanceledException)
+            {
+                break;
+            }
+            catch { }
+        }
+    }
+
+    private async Task LoadMessages(bool silent = false)
+    {
+        if (!silent)
+            IsLoading = true;
+            
+        try
+        {
+            var result = await ChatClient.GetConversationAsync(_customerId);
+            if (result.IsSuccess && result.Data != null)
+            {
+                Messages = result.Data.Messages.ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading messages: {ex.Message}");
+        }
+        finally
+        {
+            if (!silent)
+                IsLoading = false;
+            await InvokeAsync(StateHasChanged);
+            await ScrollToBottom();
+        }
+    }
+
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(NewMessage) || _customerId <= 0 || IsSending)
+            return;
+
+        var messageToSend = NewMessage.Trim();
+        NewMessage = string.Empty;
+        IsSending = true;
+        StateHasChanged();
+
+        try
+        {
+            var result = await ChatClient.SendMessageAsync(_customerId, messageToSend);
+            if (result.IsSuccess && result.Data != null)
+            {
+                Messages.Add(result.Data);
+                await InvokeAsync(StateHasChanged);
+                await ScrollToBottom();
+            }
+            else
+            {
+                Console.WriteLine($"Send message error: {result.Error}");
+                NewMessage = messageToSend;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error sending message: {ex.Message}");
+            NewMessage = messageToSend;
+        }
+        finally
+        {
+            IsSending = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task ScrollToBottom()
+    {
+        try
+        {
+            await Task.Delay(100);
+            await JSRuntime.InvokeVoidAsync("eval", @"
+                var container = document.getElementById('chatMessages');
+                if (container) container.scrollTop = container.scrollHeight;
+            ");
+        }
+        catch { }
+    }
+
+    private string FormatTime(DateTime dateTime)
+    {
+        var localTime = dateTime.Kind == DateTimeKind.Utc 
+            ? dateTime.ToLocalTime() 
+            : dateTime;
+        return localTime.ToString("HH:mm");
+    }
+
+    private void CloseChat()
+    {
+        Navigation.NavigateTo("/");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+    }
+}

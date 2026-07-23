@@ -33,6 +33,8 @@ public sealed class UserSessionService
         {
             // Share the in-flight load across concurrent callers.
             // The first caller populates _loadTask; everyone else awaits the same task.
+            // If LoadCoreAsync detected pre-render failure, it resets _loadTask to null
+            // so subsequent calls retry once the circuit becomes interactive.
             if (_loadTask is null)
             {
                 _loadTask = LoadCoreAsync();
@@ -68,11 +70,15 @@ public sealed class UserSessionService
         catch (InvalidOperationException)
         {
             // Protected browser storage is only available after the interactive circuit starts.
-            // Do not silently recurse or retry here.
+            // Clear the cached task so the next LoadAsync call retries instead of awaiting a doomed task.
+            CurrentUser = null;
+            _loadTask = null;
         }
         catch (JSDisconnectedException)
         {
             // Circuit disconnected; session will be reloaded on reconnect.
+            CurrentUser = null;
+            _loadTask = null;
         }
     }
 

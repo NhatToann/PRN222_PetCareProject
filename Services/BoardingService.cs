@@ -22,24 +22,39 @@ namespace PetShop.Services
             return _repo.GetRoomByIdAsync(roomId, ct);
         }
 
-        public async Task<IReadOnlyList<BoardingBookingDto>> GetAllBookingsAsync(CancellationToken ct = default)
+        public Task<IReadOnlyList<BoardingBookingDto>> GetAllBookingsAsync(CancellationToken ct = default)
         {
-            return await _repo.GetAllBookingsAsync(ct);
+            return _repo.GetAllBookingsAsync(ct);
         }
 
-        public async Task<bool> ConfirmCheckinAsync(int bookingId, CancellationToken ct = default)
+        public Task<bool> ConfirmCheckinAsync(int bookingId, CancellationToken ct = default)
         {
-            return await _repo.ConfirmCheckinAsync(bookingId, ct);
+            return _repo.ConfirmCheckinAsync(bookingId, ct);
         }
 
-        public async Task<bool> ConfirmCheckoutAsync(int bookingId, CancellationToken ct = default)
+        public Task<bool> ConfirmCheckoutAsync(int bookingId, CancellationToken ct = default)
         {
-            return await _repo.ConfirmCheckoutAsync(bookingId, ct);
+            return _repo.ConfirmCheckoutAsync(bookingId, ct);
         }
 
-        public async Task<IReadOnlyList<BoardingAvailabilityDto>> GetAvailabilityAsync(CancellationToken ct = default)
+        public Task<bool> RejectBookingAsync(int bookingId, string reason, CancellationToken ct = default)
         {
-            return await _repo.GetAvailabilityAsync(ct);
+            return _repo.RejectBookingAsync(bookingId, reason, ct);
+        }
+
+        public async Task<BoardingCatalogDto> GetCatalogAsync(CancellationToken ct = default)
+        {
+            // Each repository call creates its own DbContext via the factory,
+            // so the two queries are safe to run concurrently.
+            var roomsTask = _repo.GetAllRoomsAsync(ct);
+            var availTask = _repo.GetAvailabilityAsync(ct);
+            await Task.WhenAll(roomsTask, availTask);
+            return new BoardingCatalogDto(roomsTask.Result, availTask.Result);
+        }
+
+        public Task<IReadOnlyList<BoardingAvailabilityDto>> GetAvailabilityAsync(CancellationToken ct = default)
+        {
+            return _repo.GetAvailabilityAsync(ct);
         }
     }
 }

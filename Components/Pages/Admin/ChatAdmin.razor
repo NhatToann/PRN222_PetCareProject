@@ -1,0 +1,369 @@
+@page "/admin/chat"
+@page "/admin/chat/{customerId:int}"
+@using System.Net.Http.Json
+@using PetShop.Models
+@using System.Text.Json
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Quản lý Chat - PetCare Admin</PageTitle>
+
+<div class="admin-chat-container">
+    <div class="chat-sidebar">
+        <div class="sidebar-header">
+            <h2>Tin nhắn hỗ trợ</h2>
+            <span class="unread-badge" hidden="@(TotalUnread == 0)">@TotalUnread</span>
+        </div>
+        
+        <div class="search-box">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
+            </svg>
+            <input type="text" placeholder="Tìm kiếm khách hàng..." @bind="SearchTerm" @bind:event="oninput" />
+        </div>
+
+        <div class="conversations-list">
+            @if (IsLoadingConversations)
+            {
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                    <span>Đang tải...</span>
+                </div>
+            }
+            else if (!FilteredConversations.Any())
+            {
+                <div class="empty-state">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4.414A2 2 0 0 0 3 11.586l-2 2V2a1 1 0 0 1 1-1h12zM2 0a2 2 0 0 0-2 2v12.793a.5.5 0 0 0 .854.353l2.853-2.853A1 1 0 0 1 4.414 12H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H2z"/>
+                    </svg>
+                    <p>Không có cuộc trò chuyện nào</p>
+                </div>
+            }
+            else
+            {
+                @foreach (var conv in FilteredConversations)
+                {
+                    <div class="conversation-item @(SelectedCustomerId == conv.CustomerId ? "active" : "") @(conv.UnreadCount > 0 ? "unread" : "")"
+                         @onclick="() => SelectConversation(conv.CustomerId)">
+                        <div class="conv-avatar">
+                            @(conv.CustomerName?.FirstOrDefault().ToString().ToUpper() ?? "?")
+                        </div>
+                        <div class="conv-info">
+                            <div class="conv-header">
+                                <span class="conv-name">@conv.CustomerName</span>
+                                <span class="conv-time">@FormatTime(conv.LastMessageAt)</span>
+                            </div>
+                            <div class="conv-preview">
+                                <span class="last-message">@(conv.LastMessage?.Length > 40 ? conv.LastMessage.Substring(0, 40) + "..." : conv.LastMessage)</span>
+                                @if (conv.UnreadCount > 0)
+                                {
+                                    <span class="unread-count">@conv.UnreadCount</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+
+    <div class="chat-main">
+        @if (SelectedCustomerId == null)
+        {
+            <div class="no-conversation-selected">
+                <svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4.414A2 2 0 0 0 3 11.586l-2 2V2a1 1 0 0 1 1-1h12zM2 0a2 2 0 0 0-2 2v12.793a.5.5 0 0 0 .854.353l2.853-2.853A1 1 0 0 1 4.414 12H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H2z"/>
+                    <path d="M8 3.5a.5.5 0 0 1 .5.5v8a.5.5 0 0 1-.5.5H4.5a.5.5 0 0 1 0-1h3V4a.5.5 0 0 1 .5-.5z"/>
+                </svg>
+                <h3>Chọn một cuộc trò chuyện</h3>
+                <p>Chọn một khách hàng từ danh sách bên trái để xem và trả lời tin nhắn</p>
+            </div>
+        }
+        else
+        {
+            <div class="chat-header">
+                <div class="chat-user-info">
+                    <div class="user-avatar">
+                        @(CurrentConversation?.CustomerName?.FirstOrDefault().ToString().ToUpper() ?? "?")
+                    </div>
+                    <div class="user-details">
+                        <h4>@CurrentConversation?.CustomerName</h4>
+                        <span>@CurrentConversation?.CustomerEmail</span>
+                    </div>
+                </div>
+                <div class="chat-actions">
+                    <button class="action-btn" title="Đánh dấu đã đọc" @onclick="MarkAsRead">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M.54 3.87.5 3a2 2 0 0 1 2-2h3.672a2 2 0 0 1 1.414.586l.828.828A2 2 0 0 0 9.828 3H14a2 2 0 0 1 2 2v1.17a6.002 6.002 0 0 1-1.995 4.303l-.923.923a2.005 2.005 0 0 1-1.975 1h-.049a2 2 0 0 1-1.99-1.79l-.637-.637A1.999 1.999 0 0 1 2 10.17V8.5a1 1 0 0 1 1-1h1V3.87a.5.5 0 0 0-.146-.354L.54 3.87zM1 8.5V4.5A1.5 1.5 0 0 1 2.5 3h3.879a1.5 1.5 0 0 1 1.06.44l1.122 1.12A1.5 1.5 0 0 0 9.62 5H12.5A1.5 1.5 0 0 1 14 6.5v4.585a6.002 6.002 0 0 0-2.002.51l-1.02 1.02A2 2 0 0 1 10.49 14H5.51a2 2 0 0 1-1.99-1.79l-1.02-1.02A6.002 6.002 0 0 0 2 9.085V8.5a.5.5 0 0 0 .5-.5H2.5A1.5 1.5 0 0 1 1 6.5v2a.5.5 0 0 0 .5.5h1z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="messages-container" id="messagesContainer">
+                @if (IsLoadingMessages)
+                {
+                    <div class="loading-state">
+                        <div class="spinner"></div>
+                        <span>Đang tải tin nhắn...</span>
+                    </div>
+                }
+                else if (CurrentMessages.Any())
+                {
+                    @foreach (var message in CurrentMessages)
+                    {
+                        <div class="message @(message.SenderType == "Staff" ? "message-out" : "message-in")">
+                            <div class="message-bubble">
+                                <p>@message.Message</p>
+                                <span class="message-time">@FormatTime(message.SentAt)</span>
+                            </div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="empty-chat">
+                        <p>Chưa có tin nhắn nào với khách hàng này</p>
+                    </div>
+                }
+            </div>
+
+            <div class="message-input-area">
+                <textarea
+                    class="message-input"
+                    @bind="ReplyMessage"
+                    @bind:event="oninput"
+                    placeholder="Nhập câu trả lời..."
+                    @onkeydown="HandleKeyDown"
+                    rows="1"
+                    disabled="@IsSending">
+                </textarea>
+                <button class="send-btn @(string.IsNullOrWhiteSpace(ReplyMessage) ? "disabled" : "")"
+                        @onclick="SendReply"
+                        disabled="@(string.IsNullOrWhiteSpace(ReplyMessage) || IsSending)">
+                    @if (IsSending)
+                    {
+                        <div class="spinner-small"></div>
+                    }
+                    else
+                    {
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M15.854.146a.5.5 0 0 1 .11.54l-5.819 14.547a.75.75 0 0 1-1.329.124l-3.178-4.995L.643 7.184a.75.75 0 0 1 .124-1.33L15.314.037a.5.5 0 0 1 .54.11ZM6.636 10.07l2.761 4.338L14.13 2.576 6.636 10.07Zm6.787-8.201L1.591 6.602l4.339 2.76 7.494-7.493Z"/>
+                        </svg>
+                    }
+                    <span>Gửi</span>
+                </button>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public int? customerId { get; set; }
+
+    private List<ConversationSummaryDto> Conversations { get; set; } = new();
+    private ConversationDto? CurrentConversation { get; set; }
+    private List<ChatMessageDto> CurrentMessages { get; set; } = new();
+    private string SearchTerm { get; set; } = string.Empty;
+    private string ReplyMessage { get; set; } = string.Empty;
+    private int? SelectedCustomerId { get; set; }
+    private bool IsLoadingConversations { get; set; } = true;
+    private bool IsLoadingMessages { get; set; } = false;
+    private bool IsSending { get; set; } = false;
+    private int TotalUnread { get; set; } = 0;
+    private CancellationTokenSource? _cts;
+    private int _staffId = 1; // In real app, get from auth
+
+    private IEnumerable<ConversationSummaryDto> FilteredConversations =>
+        string.IsNullOrWhiteSpace(SearchTerm)
+            ? Conversations
+            : Conversations.Where(c =>
+                (c.CustomerName?.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (c.CustomerEmail?.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase) ?? false));
+
+    protected override async Task OnInitializedAsync()
+    {
+        _cts = new CancellationTokenSource();
+        await LoadConversations();
+        
+        if (customerId.HasValue && customerId.Value > 0)
+        {
+            await SelectConversation(customerId.Value);
+        }
+        
+        _ = StartPolling();
+    }
+
+    private async Task StartPolling()
+    {
+        while (!_cts!.Token.IsCancellationRequested)
+        {
+            await Task.Delay(5000, _cts.Token).ContinueWith(_ => { });
+            if (!_cts.Token.IsCancellationRequested)
+            {
+                await LoadConversations();
+                if (SelectedCustomerId.HasValue)
+                {
+                    await LoadMessages(SelectedCustomerId.Value);
+                }
+            }
+        }
+    }
+
+    private async Task LoadConversations()
+    {
+        try
+        {
+            var response = await Http.GetAsync("api/chat/conversations");
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync();
+                Conversations = JsonSerializer.Deserialize<List<ConversationSummaryDto>>(json, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                }) ?? new();
+                TotalUnread = Conversations.Sum(c => c.UnreadCount);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading conversations: {ex.Message}");
+        }
+        finally
+        {
+            IsLoadingConversations = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task SelectConversation(int custId)
+    {
+        SelectedCustomerId = custId;
+        Navigation.NavigateTo($"/admin/chat/{custId}", forceLoad: false);
+        await LoadMessages(custId);
+    }
+
+    private async Task LoadMessages(int custId)
+    {
+        try
+        {
+            IsLoadingMessages = true;
+            var response = await Http.GetAsync($"api/chat/{custId}");
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync();
+                CurrentConversation = JsonSerializer.Deserialize<ConversationDto>(json, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+                CurrentMessages = CurrentConversation?.Messages.ToList() ?? new();
+                
+                // Mark as read
+                await Http.PostAsync($"api/chat/{custId}/read", null);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading messages: {ex.Message}");
+        }
+        finally
+        {
+            IsLoadingMessages = false;
+            await InvokeAsync(StateHasChanged);
+            await ScrollToBottom();
+        }
+    }
+
+    private async Task SendReply()
+    {
+        if (string.IsNullOrWhiteSpace(ReplyMessage) || !SelectedCustomerId.HasValue || IsSending)
+            return;
+
+        try
+        {
+            IsSending = true;
+            var request = new SendMessageRequest(ReplyMessage.Trim());
+            var httpRequest = new HttpRequestMessage(HttpMethod.Post, $"api/chat/{SelectedCustomerId}/reply")
+            {
+                Content = JsonContent.Create(request)
+            };
+            httpRequest.Headers.Add("X-Staff-Id", _staffId.ToString());
+            
+            var response = await Http.SendAsync(httpRequest);
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync();
+                var newMsg = JsonSerializer.Deserialize<ChatMessageDto>(json, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+                if (newMsg != null)
+                {
+                    CurrentMessages.Add(newMsg);
+                    ReplyMessage = string.Empty;
+                    await LoadConversations();
+                    await ScrollToBottom();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error sending reply: {ex.Message}");
+        }
+        finally
+        {
+            IsSending = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task MarkAsRead()
+    {
+        if (SelectedCustomerId.HasValue)
+        {
+            await Http.PostAsync($"api/chat/{SelectedCustomerId}/read", null);
+            await LoadConversations();
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await SendReply();
+        }
+    }
+
+    private async Task ScrollToBottom()
+    {
+        await Task.Delay(100);
+        await JSRuntime.InvokeVoidAsync("eval", @"
+            var container = document.getElementById('messagesContainer');
+            if (container) container.scrollTop = container.scrollHeight;
+        ");
+    }
+
+    private string FormatTime(DateTime? dateTime)
+    {
+        if (!dateTime.HasValue)
+            return "";
+        
+        var localTime = dateTime.Value.Kind == DateTimeKind.Utc 
+            ? dateTime.Value.ToLocalTime() 
+            : dateTime.Value;
+        
+        var today = DateTime.Today;
+        if (localTime.Date == today)
+            return localTime.ToString("HH:mm");
+        if (localTime.Date == today.AddDays(-1))
+            return "Hôm qua";
+        return localTime.ToString("dd/MM HH:mm");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+    }
+}

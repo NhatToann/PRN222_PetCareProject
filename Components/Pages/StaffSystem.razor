@@ -1,0 +1,1071 @@
+@page "/staff-system"
+@page "/staff-system/chat"
+@page "/staff-system/chat/{customerId:int}"
+@using PetShop.Models
+@inject NavigationManager Navigation
+@inject HttpClient Http
+@inject UserSessionService UserSession
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Hỗ trợ khách hàng - PetCare Staff</PageTitle>
+
+<div class="staff-chat-container">
+    <div class="chat-sidebar">
+        <div class="sidebar-header">
+            <div class="staff-info">
+                <div class="staff-avatar">
+                    @(StaffName?.FirstOrDefault().ToString().ToUpper() ?? "S")
+                </div>
+                <div class="staff-details">
+                    <span class="staff-name">@StaffName</span>
+                    <span class="staff-role">Staff</span>
+                </div>
+            </div>
+            <span class="unread-badge @(TotalUnread == 0 ? "hidden" : "")">@TotalUnread</span>
+        </div>
+
+        <nav class="staff-nav">
+            <a href="/staff-system/chat" class="staff-nav-item active">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+                Hỗ trợ khách hàng
+            </a>
+            <a href="/staff/boarding" class="staff-nav-item">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-2 .9-2 2v16c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 18H5V9h14v12zM5 7V5h14v2H5z"/></svg>
+                Lịch đặt phòng lưu trú
+            </a>
+        </nav>
+
+        <div class="search-box">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
+            </svg>
+            <input type="text" placeholder="Tìm kiếm khách hàng..." @bind="SearchTerm" @bind:event="oninput" />
+        </div>
+
+        <div class="sort-tabs">
+            <button class="sort-tab @(SortBy == "newest" ? "active" : "")" @onclick='() => SetSort("newest")'>
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                    <path fill-rule="evenodd" d="M8 1.75a.75.75 0 0 1 .688.406l3.5 6a.75.75 0 0 1-1.326 1.008L8 6.686 5.44 8.99a.75.75 0 1 1-1.326-1.008l3.5-6A.75.75 0 0 1 8 1.75z"/>
+                </svg>
+                Mới nhất
+            </button>
+            <button class="sort-tab @(SortBy == "oldest" ? "active" : "")" @onclick='() => SetSort("oldest")'>
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                    <path fill-rule="evenodd" d="M8 14.25a.75.75 0 0 1-.75-.75V4.856l-2.879 2.848a.75.75 0 0 1-1.06-1.06l3.94-3.94A.75.75 0 0 1 8.75 2.5h4a.75.75 0 0 1 .75.75v10.5a.75.75 0 0 1-.75.75H8z"/>
+                </svg>
+                Cũ nhất
+            </button>
+        </div>
+
+        <div class="conversations-list">
+            @if (IsLoadingConversations)
+            {
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                    <span>Đang tải...</span>
+                </div>
+            }
+            else if (!FilteredConversations.Any())
+            {
+                <div class="empty-state">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4.414A2 2 0 0 0 3 11.586l-2 2V2a1 1 0 0 1 1-1h12zM2 0a2 2 0 0 0-2 2v12.793a.5.5 0 0 0 .854.353l2.853-2.853A1 1 0 0 1 4.414 12H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H2z"/>
+                    </svg>
+                    <p>Không có cuộc trò chuyện nào</p>
+                </div>
+            }
+            else
+            {
+                @foreach (var conv in FilteredConversations)
+                {
+                    <div class="conversation-item @(SelectedCustomerId == conv.CustomerId ? "active" : "") @(conv.UnreadCount > 0 ? "unread" : "")"
+                         @onclick="() => SelectConversation(conv.CustomerId)">
+                        <div class="conv-avatar @(conv.UnreadCount > 0 ? "has-notification" : "")">
+                            @(conv.CustomerName?.FirstOrDefault().ToString().ToUpper() ?? "?")
+                        </div>
+                        <div class="conv-info">
+                            <div class="conv-header">
+                                <span class="conv-name">@conv.CustomerName</span>
+                                <span class="conv-time">@FormatTime(conv.LastMessageAt)</span>
+                            </div>
+                            <div class="conv-preview">
+                                <span class="last-message">@(conv.LastMessage?.Length > 35 ? conv.LastMessage.Substring(0, 35) + "..." : conv.LastMessage ?? "Chưa có tin nhắn")</span>
+                                @if (conv.UnreadCount > 0)
+                                {
+                                    <span class="unread-count">@conv.UnreadCount</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+
+    <div class="chat-main">
+        @if (SelectedCustomerId == null)
+        {
+            <div class="no-conversation-selected">
+                <div class="no-conv-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4.414A2 2 0 0 0 3 11.586l-2 2V2a1 1 0 0 1 1-1h12zM2 0a2 2 0 0 0-2 2v12.793a.5.5 0 0 0 .854.353l2.853-2.853A1 1 0 0 1 4.414 12H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H2z"/>
+                        <path d="M5 6.5A.5.5 0 0 1 5.5 6h5a.5.5 0 0 1 0 1H6a.5.5 0 0 1-.5-.5zM5 8.5A.5.5 0 0 1 5.5 8h5a.5.5 0 0 1 0 1H6a.5.5 0 0 1-.5-.5zM5 10.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1H6a.5.5 0 0 1-.5-.5z"/>
+                    </svg>
+                </div>
+                <h3>Chào @StaffName!</h3>
+                <p>Chọn một khách hàng từ danh sách bên trái để xem và trả lời tin nhắn</p>
+                <span class="total-unread">@(TotalUnread > 0 ? $"Bạn có {TotalUnread} tin nhắn chưa đọc" : "Tất cả tin nhắn đã được đọc")</span>
+            </div>
+        }
+        else
+        {
+            <div class="chat-header">
+                <div class="chat-user-info">
+                    <div class="user-avatar">
+                        @(CurrentConversation?.CustomerName?.FirstOrDefault().ToString().ToUpper() ?? "?")
+                    </div>
+                    <div class="user-details">
+                        <h4>@CurrentConversation?.CustomerName</h4>
+                        <span>@(CurrentConversation?.CustomerEmail ?? "Khách hàng")</span>
+                    </div>
+                </div>
+                <div class="chat-actions">
+                    <button class="action-btn @(CurrentConversation?.UnreadCount > 0 ? "has-badge" : "")" 
+                            title="Đánh dấu đã đọc" 
+                            @onclick="MarkAsRead">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M.54 3.87.5 3a2 2 0 0 1 2-2h3.672a2 2 0 0 1 1.414.586l.828.828A2 2 0 0 0 9.828 3H14a2 2 0 0 1 2 2v1.17a6.002 6.002 0 0 1-1.995 4.303l-.923.923a2.005 2.005 0 0 1-1.975 1h-.049a2 2 0 0 1-1.99-1.79l-.637-.637A1.999 1.999 0 0 1 2 10.17V8.5a1 1 0 0 1 1-1h1V3.87a.5.5 0 0 0-.146-.354L.54 3.87zM1 8.5V4.5A1.5 1.5 0 0 1 2.5 3h3.879a1.5 1.5 0 0 1 1.06.44l1.122 1.12A1.5 1.5 0 0 0 9.62 5H12.5A1.5 1.5 0 0 1 14 6.5v4.585a6.002 6.002 0 0 0-2.002.51l-1.02 1.02A2 2 0 0 1 10.49 14H5.51a2 2 0 0 1-1.99-1.79l-1.02-1.02A6.002 6.002 0 0 0 2 9.085V8.5a.5.5 0 0 0 .5-.5H2.5A1.5 1.5 0 0 1 1 6.5v2a.5.5 0 0 0 .5.5h1z"/>
+                        </svg>
+                    </button>
+                    <button class="action-btn" title="Quay lại danh sách" @onclick="ClearSelection">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+                            <path fill-rule="evenodd" d="M12.5 3a.5.5 0 0 1 .5.5v11a.5.5 0 0 1-1 0v-11a.5.5 0 0 1 .5-.5z"/>
+                            <path fill-rule="evenodd" d="M3.5 3A1.5 1.5 0 0 0 2 4.5v11A1.5 1.5 0 0 0 3.5 17h7a1.5 1.5 0 0 0 1.5-1.5v-11A1.5 1.5 0 0 0 10.5 3h-7z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="messages-container" id="messagesContainer">
+                @if (IsLoadingMessages)
+                {
+                    <div class="loading-state">
+                        <div class="spinner"></div>
+                        <span>Đang tải tin nhắn...</span>
+                    </div>
+                }
+                else if (CurrentMessages.Any())
+                {
+                    @foreach (var message in CurrentMessages)
+                    {
+                        <div class="message @(message.SenderType == "Staff" ? "message-out" : "message-in")">
+                            <div class="message-bubble">
+                                <p>@message.Message</p>
+                                <span class="message-time">@FormatDateTime(message.SentAt)</span>
+                            </div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="empty-chat">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M5 6.5A.5.5 0 0 1 5.5 6h5a.5.5 0 0 1 0 1H6a.5.5 0 0 1-.5-.5z"/>
+                            <path d="M5 8.5A.5.5 0 0 1 5.5 8h5a.5.5 0 0 1 0 1H6a.5.5 0 0 1-.5-.5z"/>
+                            <path d="M5 10.5A.5.5 0 0 1 5.5 10h5a.5.5 0 0 1 0 1H6a.5.5 0 0 1-.5-.5z"/>
+                        </svg>
+                        <p>Chưa có tin nhắn nào với khách hàng này</p>
+                        <span>Hãy chào hỏi khách hàng!</span>
+                    </div>
+                }
+            </div>
+
+            <div class="message-input-area">
+                <textarea
+                    class="message-input"
+                    @bind="ReplyMessage"
+                    @bind:event="oninput"
+                    placeholder="Nhập câu trả lời cho khách hàng..."
+                    @onkeydown="HandleKeyDown"
+                    rows="1"
+                    disabled="@IsSending">
+                </textarea>
+                <button class="send-btn @(string.IsNullOrWhiteSpace(ReplyMessage) ? "disabled" : "")"
+                        @onclick="SendReply"
+                        disabled="@(string.IsNullOrWhiteSpace(ReplyMessage) || IsSending)">
+                    @if (IsSending)
+                    {
+                        <div class="spinner-small"></div>
+                    }
+                    else
+                    {
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M15.854.146a.5.5 0 0 1 .11.54l-5.819 14.547a.75.75 0 0 1-1.329.124l-3.178-4.995L.643 7.184a.75.75 0 0 1 .124-1.33L15.314.037a.5.5 0 0 1 .54.11ZM6.636 10.07l2.761 4.338L14.13 2.576 6.636 10.07Zm6.787-8.201L1.591 6.602l4.339 2.76 7.494-7.493Z"/>
+                        </svg>
+                    }
+                    <span>Gửi</span>
+                </button>
+            </div>
+        }
+    </div>
+</div>
+
+<style>
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+    }
+
+    .staff-chat-container {
+        display: flex;
+        height: calc(100vh - 60px);
+        background: #f5f6fa;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    .chat-sidebar {
+        width: 320px;
+        background: white;
+        border-right: 1px solid #e0e0e0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .sidebar-header {
+        padding: 16px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .staff-info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .staff-avatar {
+        width: 44px;
+        height: 44px;
+        background: rgba(255,255,255,0.25);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        font-weight: 600;
+    }
+
+    .staff-details {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .staff-name {
+        font-weight: 600;
+        font-size: 15px;
+    }
+
+    .staff-role {
+        font-size: 12px;
+        opacity: 0.85;
+    }
+
+    .unread-badge {
+        background: #ff4757;
+        color: white;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+        min-width: 28px;
+        text-align: center;
+    }
+
+    .unread-badge.hidden {
+        display: none;
+    }
+
+    .staff-nav {
+        display: flex;
+        flex-direction: column;
+        padding: 0.5rem 0.75rem;
+        gap: 0.25rem;
+        border-bottom: 1px solid #eee;
+    }
+
+    .staff-nav-item {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        padding: 0.6rem 0.85rem;
+        border-radius: 8px;
+        color: #4a5568;
+        text-decoration: none;
+        font-size: 0.92rem;
+        font-weight: 500;
+        transition: all 0.15s;
+    }
+    .staff-nav-item:hover {
+        background: #eef0f7;
+        color: #667eea;
+    }
+    .staff-nav-item.active {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+    .staff-nav-item svg { flex-shrink: 0; }
+
+    .search-box {
+        padding: 12px 16px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .search-box svg {
+        color: #999;
+        flex-shrink: 0;
+    }
+
+    .search-box input {
+        flex: 1;
+        border: none;
+        outline: none;
+        font-size: 14px;
+        background: transparent;
+    }
+
+    .search-box input::placeholder {
+        color: #aaa;
+    }
+
+    .sort-tabs {
+        display: flex;
+        padding: 8px 12px;
+        gap: 8px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .sort-tab {
+        flex: 1;
+        padding: 8px;
+        border: 1px solid #e0e0e0;
+        background: white;
+        border-radius: 8px;
+        font-size: 13px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        transition: all 0.2s;
+        color: #666;
+    }
+
+    .sort-tab:hover {
+        background: #f8f9fa;
+    }
+
+    .sort-tab.active {
+        background: #667eea;
+        color: white;
+        border-color: #667eea;
+    }
+
+    .conversations-list {
+        flex: 1;
+        overflow-y: auto;
+    }
+
+    .loading-state, .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 40px 20px;
+        color: #999;
+        text-align: center;
+    }
+
+    .empty-state svg {
+        margin-bottom: 16px;
+        opacity: 0.5;
+    }
+
+    .empty-state p {
+        font-size: 14px;
+    }
+
+    .conversation-item {
+        display: flex;
+        align-items: center;
+        padding: 12px 16px;
+        gap: 12px;
+        cursor: pointer;
+        border-bottom: 1px solid #f0f0f0;
+        transition: background 0.15s;
+    }
+
+    .conversation-item:hover {
+        background: #f8f9fa;
+    }
+
+    .conversation-item.active {
+        background: #eef0f7;
+        border-left: 3px solid #667eea;
+    }
+
+    .conversation-item.unread {
+        background: #f8f9ff;
+    }
+
+    .conv-avatar {
+        width: 48px;
+        height: 48px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 16px;
+        flex-shrink: 0;
+        position: relative;
+    }
+
+    .conv-avatar.has-notification::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 12px;
+        height: 12px;
+        background: #ff4757;
+        border-radius: 50%;
+        border: 2px solid white;
+    }
+
+    .conv-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .conv-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 4px;
+    }
+
+    .conv-name {
+        font-weight: 600;
+        font-size: 14px;
+        color: #333;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .conv-time {
+        font-size: 11px;
+        color: #999;
+        flex-shrink: 0;
+        margin-left: 8px;
+    }
+
+    .conv-preview {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+
+    .last-message {
+        font-size: 13px;
+        color: #777;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        flex: 1;
+    }
+
+    .unread-count {
+        background: #667eea;
+        color: white;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 10px;
+        flex-shrink: 0;
+    }
+
+    .chat-main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        background: white;
+    }
+
+    .no-conversation-selected {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: #999;
+        padding: 40px;
+    }
+
+    .no-conv-icon {
+        width: 120px;
+        height: 120px;
+        background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 24px;
+    }
+
+    .no-conv-icon svg {
+        color: #667eea;
+    }
+
+    .no-conversation-selected h3 {
+        font-size: 22px;
+        color: #333;
+        margin-bottom: 8px;
+    }
+
+    .no-conversation-selected p {
+        font-size: 14px;
+        margin-bottom: 12px;
+    }
+
+    .total-unread {
+        font-size: 13px;
+        color: #667eea;
+        font-weight: 500;
+    }
+
+    .chat-header {
+        padding: 16px 20px;
+        border-bottom: 1px solid #e0e0e0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: white;
+    }
+
+    .chat-user-info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .user-avatar {
+        width: 44px;
+        height: 44px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 16px;
+    }
+
+    .user-details h4 {
+        font-size: 16px;
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 2px;
+    }
+
+    .user-details span {
+        font-size: 13px;
+        color: #777;
+    }
+
+    .chat-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .action-btn {
+        width: 40px;
+        height: 40px;
+        border: 1px solid #e0e0e0;
+        background: white;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: #666;
+        transition: all 0.2s;
+        position: relative;
+    }
+
+    .action-btn:hover {
+        background: #f5f6fa;
+        color: #667eea;
+        border-color: #667eea;
+    }
+
+    .action-btn.has-badge::after {
+        content: '';
+        position: absolute;
+        top: -4px;
+        right: -4px;
+        width: 10px;
+        height: 10px;
+        background: #ff4757;
+        border-radius: 50%;
+    }
+
+    .messages-container {
+        flex: 1;
+        padding: 20px;
+        overflow-y: auto;
+        background: #f8f9fc;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .empty-chat {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: #aaa;
+        text-align: center;
+    }
+
+    .empty-chat svg {
+        margin-bottom: 12px;
+        opacity: 0.4;
+    }
+
+    .empty-chat p {
+        font-size: 14px;
+        color: #888;
+    }
+
+    .empty-chat span {
+        font-size: 12px;
+        margin-top: 4px;
+    }
+
+    .message {
+        display: flex;
+        max-width: 70%;
+    }
+
+    .message-out {
+        align-self: flex-end;
+    }
+
+    .message-in {
+        align-self: flex-start;
+    }
+
+    .message-bubble {
+        padding: 12px 16px;
+        border-radius: 16px;
+        position: relative;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+
+    .message-out .message-bubble {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-bottom-right-radius: 4px;
+    }
+
+    .message-in .message-bubble {
+        background: white;
+        color: #333;
+        border-bottom-left-radius: 4px;
+        border: 1px solid #e0e0e0;
+    }
+
+    .message-bubble p {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.5;
+        word-break: break-word;
+    }
+
+    .message-time {
+        font-size: 11px;
+        opacity: 0.7;
+        display: block;
+        margin-top: 6px;
+        text-align: right;
+    }
+
+    .message-input-area {
+        padding: 16px 20px;
+        border-top: 1px solid #e0e0e0;
+        display: flex;
+        gap: 12px;
+        align-items: flex-end;
+        background: white;
+    }
+
+    .message-input {
+        flex: 1;
+        padding: 12px 16px;
+        border: 1px solid #e0e0e0;
+        border-radius: 24px;
+        font-size: 14px;
+        font-family: inherit;
+        resize: none;
+        outline: none;
+        transition: border-color 0.2s;
+        max-height: 120px;
+        min-height: 46px;
+    }
+
+    .message-input:focus {
+        border-color: #667eea;
+    }
+
+    .message-input:disabled {
+        background: #f5f5f5;
+    }
+
+    .send-btn {
+        height: 46px;
+        padding: 0 24px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 24px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.2s;
+        flex-shrink: 0;
+    }
+
+    .send-btn:hover:not(.disabled) {
+        transform: scale(1.02);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    .send-btn.disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .spinner {
+        width: 24px;
+        height: 24px;
+        border: 3px solid rgba(102, 126, 234, 0.3);
+        border-top-color: #667eea;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    .spinner-small {
+        width: 18px;
+        height: 18px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top-color: white;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    @@media (max-width: 768px) {
+        .staff-chat-container {
+            flex-direction: column;
+        }
+
+        .chat-sidebar {
+            width: 100%;
+            height: auto;
+            max-height: 40vh;
+        }
+
+        .message {
+            max-width: 85%;
+        }
+    }
+</style>
+
+@code {
+    [Parameter] public int? customerId { get; set; }
+
+    private List<ConversationSummaryDto> Conversations { get; set; } = new();
+    private ConversationDto? CurrentConversation { get; set; }
+    private List<ChatMessageDto> CurrentMessages { get; set; } = new();
+    private string SearchTerm { get; set; } = string.Empty;
+    private string ReplyMessage { get; set; } = string.Empty;
+    private int? SelectedCustomerId { get; set; }
+    private bool IsLoadingConversations { get; set; } = true;
+    private bool IsLoadingMessages { get; set; } = false;
+    private bool IsSending { get; set; } = false;
+    private int TotalUnread { get; set; } = 0;
+    private string StaffName { get; set; } = "Staff";
+    private string SortBy { get; set; } = "newest";
+    private CancellationTokenSource? _cts;
+
+    private IEnumerable<ConversationSummaryDto> FilteredConversations
+    {
+        get
+        {
+            var filtered = string.IsNullOrWhiteSpace(SearchTerm)
+                ? Conversations
+                : Conversations.Where(c =>
+                    (c.CustomerName?.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                    (c.CustomerEmail?.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase) ?? false));
+
+            return SortBy == "newest"
+                ? filtered.OrderByDescending(c => c.LastMessageAt ?? DateTime.MinValue)
+                : filtered.OrderBy(c => c.LastMessageAt ?? DateTime.MinValue);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _cts = new CancellationTokenSource();
+        await LoadUserInfo();
+        await LoadConversations();
+
+        if (customerId.HasValue && customerId.Value > 0)
+        {
+            await SelectConversation(customerId.Value);
+        }
+
+        _ = StartPolling();
+    }
+
+    private async Task LoadUserInfo()
+    {
+        try
+        {
+            await UserSession.LoadAsync();
+            StaffName = UserSession.CurrentUser?.Email ?? "Staff";
+        }
+        catch
+        {
+            StaffName = "Staff";
+        }
+    }
+
+    private async Task StartPolling()
+    {
+        while (!_cts!.Token.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(5000, _cts.Token);
+                if (!_cts.Token.IsCancellationRequested)
+                {
+                    await LoadConversations();
+                    if (SelectedCustomerId.HasValue)
+                    {
+                        await LoadMessages(SelectedCustomerId.Value);
+                    }
+                }
+            }
+            catch (TaskCanceledException) { break; }
+            catch { }
+        }
+    }
+
+    private async Task LoadConversations()
+    {
+        try
+        {
+            var response = await Http.GetAsync("api/chat/conversations");
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync();
+                Conversations = System.Text.Json.JsonSerializer.Deserialize<List<ConversationSummaryDto>>(json, 
+                    new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+                TotalUnread = Conversations.Sum(c => c.UnreadCount);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading conversations: {ex.Message}");
+        }
+        finally
+        {
+            IsLoadingConversations = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void SetSort(string sort)
+    {
+        SortBy = sort;
+        StateHasChanged();
+    }
+
+    private async Task SelectConversation(int custId)
+    {
+        SelectedCustomerId = custId;
+        Navigation.NavigateTo($"/staff-system/chat/{custId}", forceLoad: false);
+        await LoadMessages(custId);
+    }
+
+    private void ClearSelection()
+    {
+        SelectedCustomerId = null;
+        Navigation.NavigateTo("/staff-system/chat", forceLoad: false);
+    }
+
+    private async Task LoadMessages(int custId)
+    {
+        try
+        {
+            IsLoadingMessages = true;
+            var response = await Http.GetAsync($"api/chat/{custId}");
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync();
+                CurrentConversation = System.Text.Json.JsonSerializer.Deserialize<ConversationDto>(json, 
+                    new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                CurrentMessages = CurrentConversation?.Messages.ToList() ?? new();
+                await Http.PostAsync($"api/chat/{custId}/read", null);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading messages: {ex.Message}");
+        }
+        finally
+        {
+            IsLoadingMessages = false;
+            await InvokeAsync(StateHasChanged);
+            await ScrollToBottom();
+        }
+    }
+
+    private async Task SendReply()
+    {
+        if (string.IsNullOrWhiteSpace(ReplyMessage) || !SelectedCustomerId.HasValue || IsSending)
+            return;
+
+        var originalMessage = ReplyMessage.Trim();
+        ReplyMessage = string.Empty;
+        IsSending = true;
+
+        try
+        {
+            var request = new SendMessageRequest(originalMessage);
+            var httpRequest = new HttpRequestMessage(HttpMethod.Post, $"api/chat/{SelectedCustomerId}/reply")
+            {
+                Content = JsonContent.Create(request)
+            };
+            httpRequest.Headers.Add("X-Staff-Id", UserSession.CurrentUser?.UserId.ToString() ?? "1");
+
+            var response = await Http.SendAsync(httpRequest);
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync();
+                var newMsg = System.Text.Json.JsonSerializer.Deserialize<ChatMessageDto>(json, 
+                    new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (newMsg != null)
+                {
+                    CurrentMessages.Add(newMsg);
+                    await LoadConversations();
+                    await ScrollToBottom();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error sending reply: {ex.Message}");
+            ReplyMessage = originalMessage;
+        }
+        finally
+        {
+            IsSending = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task MarkAsRead()
+    {
+        if (SelectedCustomerId.HasValue)
+        {
+            await Http.PostAsync($"api/chat/{SelectedCustomerId}/read", null);
+            await LoadConversations();
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await SendReply();
+        }
+    }
+
+    private async Task ScrollToBottom()
+    {
+        await Task.Delay(100);
+        await JSRuntime.InvokeVoidAsync("eval", @"
+            var container = document.getElementById('messagesContainer');
+            if (container) container.scrollTop = container.scrollHeight;
+        ");
+    }
+
+    private string FormatTime(DateTime? dateTime)
+    {
+        if (!dateTime.HasValue)
+            return "";
+
+        var localTime = dateTime.Value.Kind == DateTimeKind.Utc
+            ? dateTime.Value.ToLocalTime()
+            : dateTime.Value;
+
+        var today = DateTime.Today;
+        if (localTime.Date == today)
+            return localTime.ToString("HH:mm");
+        if (localTime.Date == today.AddDays(-1))
+            return "Hôm qua";
+        return localTime.ToString("dd/MM HH:mm");
+    }
+
+    private string FormatDateTime(DateTime dateTime)
+    {
+        var localTime = dateTime.Kind == DateTimeKind.Utc
+            ? dateTime.ToLocalTime()
+            : dateTime;
+
+        var today = DateTime.Today;
+        if (localTime.Date == today)
+            return localTime.ToString("HH:mm");
+        if (localTime.Date == today.AddDays(-1))
+            return $"Hôm qua {localTime:HH:mm}";
+        return localTime.ToString("dd/MM HH:mm");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+    }
+}

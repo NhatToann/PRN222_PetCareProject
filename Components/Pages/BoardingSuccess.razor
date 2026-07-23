@@ -1,0 +1,145 @@
+@page "/boarding/success"
+@inject NavigationManager Navigation
+
+<PageTitle>Đặt Phòng Thành Công - PetCare</PageTitle>
+
+<div class="success-container">
+    <div class="success-card">
+        <div class="success-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+            </svg>
+        </div>
+
+        <h1>Đặt Phòng Thành Công!</h1>
+        <p class="message">
+            @if (IsCod)
+            {
+                <span>Cảm ơn bạn đã đặt phòng. Vui lòng thanh toán khi nhận phòng.</span>
+            }
+            else
+            {
+                <span>Cảm ơn bạn đã thanh toán. Chúng tôi đã nhận được thanh toán của bạn.</span>
+            }
+        </p>
+
+        @if (BookingId.HasValue)
+        {
+            <div class="booking-id">
+                Mã đặt phòng: <strong>@($"BR-{BookingId:D4}")</strong>
+            </div>
+        }
+
+        <div class="actions">
+            <button class="btn-primary" @onclick="GoHome">
+                Quay về trang chủ
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+    .success-container {
+        min-height: 70vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+    }
+
+    .success-card {
+        background: white;
+        border-radius: 16px;
+        padding: 3rem;
+        text-align: center;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+        max-width: 500px;
+    }
+
+    .success-icon {
+        width: 80px;
+        height: 80px;
+        background: linear-gradient(135deg, #27ae60, #2ecc71);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1.5rem;
+    }
+
+    .success-icon svg {
+        width: 48px;
+        height: 48px;
+        fill: white;
+    }
+
+    h1 {
+        color: #2c3e50;
+        margin-bottom: 1rem;
+        font-size: 1.75rem;
+    }
+
+    .message {
+        color: #7f8c8d;
+        margin-bottom: 1.5rem;
+        line-height: 1.6;
+    }
+
+    .booking-id {
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 2rem;
+        font-size: 1.1rem;
+        color: #2c3e50;
+    }
+
+    .booking-id strong {
+        color: #e74c3c;
+    }
+
+    .actions {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+    }
+
+    .btn-primary {
+        padding: 0.875rem 2rem;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: opacity 0.2s;
+    }
+
+    .btn-primary:hover {
+        opacity: 0.9;
+    }
+</style>
+
+@code {
+    private int? BookingId { get; set; }
+    private bool IsCod { get; set; }
+
+    protected override void OnInitialized()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        
+        if (int.TryParse(query["bookingId"], out var id))
+        {
+            BookingId = id;
+        }
+
+        IsCod = query["method"] == "COD";
+    }
+
+    private void GoHome()
+    {
+        Navigation.NavigateTo("/", forceLoad: true);
+    }
+}

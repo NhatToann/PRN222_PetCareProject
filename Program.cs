@@ -1,3 +1,4 @@
+using System.Linq;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -75,6 +76,16 @@ builder.Services.AddHttpClient<PetShop.Interfaces.IPetsClient, PetShop.Services.
     .AddHttpMessageHandler<PetShop.Services.SpaAuthHeaderHandler>();
 builder.Services.AddScoped<PetShop.Services.UserSessionService>();
 builder.Services.AddScoped<PetShop.Services.CartStateService>();
+builder.Services.AddHttpClient<PetShop.Interfaces.IChatClient, PetShop.Services.ChatClient>((sp, client) =>
+{
+    var context = sp.GetRequiredService<IHttpContextAccessor>().HttpContext;
+    client.BaseAddress = new Uri(context is null ? builder.Configuration["App:BaseUrl"] ?? "http://localhost:5286/" : $"{context.Request.Scheme}://{context.Request.Host}/");
+});
+builder.Services.AddHttpClient<PetShop.Interfaces.IBoardingClient, PetShop.Services.BoardingClient>((sp, client) =>
+{
+    var context = sp.GetRequiredService<IHttpContextAccessor>().HttpContext;
+    client.BaseAddress = new Uri(context is null ? builder.Configuration["App:BaseUrl"] ?? "http://localhost:5286/" : $"{context.Request.Scheme}://{context.Request.Host}/");
+});
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -103,8 +114,8 @@ if (string.IsNullOrWhiteSpace(dbConnectionString))
         "Add it to appsettings.json/appsettings.Development.json, or set environment variable 'ConnectionStrings__DBDefault'.");
 }
 
-builder.Services.AddDbContext<PetShop.Data.ShopPetDatabaseContext>(options =>
-    options.UseSqlServer(dbConnectionString));
+builder.Services.AddDbContextFactory<PetShop.Data.ShopPetDatabaseContext>(options =>
+    options.UseSqlServer(dbConnectionString), ServiceLifetime.Singleton);
 
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession(options =>
@@ -128,6 +139,8 @@ builder.Services.AddScoped<PetShop.Interfaces.IAttendanceService, PetShop.Servic
 builder.Services.AddScoped<PetShop.Interfaces.IPayrollService, PetShop.Services.PayrollService>();
 builder.Services.AddScoped<PetShop.Interfaces.IBoardingRepository, PetShop.Repositories.BoardingRepository>();
 builder.Services.AddScoped<PetShop.Interfaces.IBoardingService, PetShop.Services.BoardingService>();
+builder.Services.AddScoped<PetShop.Repositories.IChatRepository, PetShop.Repositories.ChatRepository>();
+builder.Services.AddScoped<PetShop.Services.IChatService, PetShop.Services.ChatService>();
 
 builder.Services.Configure<PetShop.Models.PayOSOptions>(
     builder.Configuration.GetSection(PetShop.Models.PayOSOptions.SectionName));

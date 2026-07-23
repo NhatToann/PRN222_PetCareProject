@@ -39,6 +39,8 @@ namespace PetShop.Models
 
         public decimal TotalPrice { get; set; }
 
+        public string? PaymentMethod { get; set; }
+
         public virtual Customer Customer { get; set; } = null!;
     }
 }

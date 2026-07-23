@@ -29,6 +29,13 @@ namespace PetShop.Models
         string PaymentMethod
     );
 
+    public sealed record BoardingBookingPaymentStatusResult(
+        int BookingId,
+        string BookingStatus,
+        string PaymentStatus,
+        int? OrderCode
+    );
+
     public sealed record BoardingBookingDto(
         int BookingId,
         int CustomerId,
@@ -47,6 +54,7 @@ namespace PetShop.Models
         DateTime? CreatedAt,
         DateTime? UpdatedAt,
         decimal TotalPrice,
+        string? PaymentMethod,
         CustomerDto? Customer
     );
 
@@ -62,5 +70,10 @@ namespace PetShop.Models
         int TotalRooms,
         int ActiveBookings,
         int AvailableRooms
+    );
+
+    public sealed record BoardingCatalogDto(
+        IReadOnlyList<BoardingRoom> Rooms,
+        IReadOnlyList<BoardingAvailabilityDto> Availability
     );
 }

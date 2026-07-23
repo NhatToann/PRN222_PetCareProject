@@ -92,7 +92,7 @@
         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Login.razor] OnAfterRenderAsync LoadAsync threw: {ex.GetType().Name}"); }
         if (UserSession.IsAuthenticated)
         {
-            Navigation.NavigateTo(UserSession.CurrentUser!.Role == "staff" ? "/system" : "/", replace: true);
+            Navigation.NavigateTo(UserSession.CurrentUser!.Role == "staff" ? "/system" : "/");
             return;
         }
 
@@ -142,8 +142,7 @@
         }
 
         await UserSession.SignInAsync(result.Data);
-        // No need to set loginLoading=false here — navigation tears down the component.
-        Navigation.NavigateTo(result.Data.Role.Equals("staff", StringComparison.OrdinalIgnoreCase) ? "/system" : "/", replace: true);
+        Navigation.NavigateTo(result.Data.Role.Equals("staff", StringComparison.OrdinalIgnoreCase) ? "/system" : "/");
     }
 
     private async Task HandleLoginAsync()
@@ -172,7 +171,7 @@
             }
 
             await UserSession.SignInAsync(result.Data);
-            Navigation.NavigateTo(result.Data.Role.Equals("staff", StringComparison.OrdinalIgnoreCase) ? "/system" : "/", replace: true);
+            Navigation.NavigateTo(result.Data.Role.Equals("staff", StringComparison.OrdinalIgnoreCase) ? "/system" : "/");
         }
         finally
         {

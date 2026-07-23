@@ -1,8 +1,11 @@
 ﻿@inherits LayoutComponentBase
+@using PetShop.Components.Shared
 @inject PetShop.Services.CartStateService CartState
 @inject IJSRuntime JS
 
 @Body
+
+<ChatWidget />
 
 <div id="blazor-error-ui">
     An unhandled error has occurred.

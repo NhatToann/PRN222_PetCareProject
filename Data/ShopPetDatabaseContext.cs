@@ -215,6 +215,9 @@ namespace PetShop.Data
                 entity.Property(e => e.TotalPrice)
                     .HasColumnType("decimal(10, 2)")
                     .HasColumnName("total_price");
+                entity.Property(e => e.PaymentMethod)
+                    .HasMaxLength(50)
+                    .HasColumnName("payment_method");
                 entity.Property(e => e.UpdatedAt)
                     .HasDefaultValueSql("(getdate())")
                     .HasColumnName("updated_at");

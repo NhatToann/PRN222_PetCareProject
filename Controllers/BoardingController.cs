@@ -14,6 +14,7 @@ namespace PetShop.Controllers
         /// <summary>Must match CHECK constraint CK_boarding_bookings_Status in SQL Server.</summary>
         private const string BoardingStatusChoXacNhan = "Chờ xác nhận";
         private const string BoardingStatusDaThanhToan = "Đã thanh toán";
+        private const string BoardingStatusBiTuChoi = "Bị từ chối";
 
         private readonly IBoardingService _service;
         private readonly ShopPetDatabaseContext _db;
@@ -63,11 +64,103 @@ namespace PetShop.Controllers
             return ok ? Ok(new { message = "Đã xác nhận trả phòng." }) : NotFound(new { message = "Không tìm thấy booking." });
         }
 
+        [HttpPatch("bookings/{bookingId:int}/reject")]
+        public async Task<ActionResult> RejectBooking(int bookingId, [FromQuery] string? reason, CancellationToken ct)
+        {
+            var ok = await _service.RejectBookingAsync(bookingId, reason ?? "Không có lý do", ct);
+            return ok ? Ok(new { message = "Đã từ chối booking." }) : NotFound(new { message = "Không tìm thấy booking." });
+        }
+
         [HttpGet("availability")]
         public async Task<ActionResult<IReadOnlyList<BoardingAvailabilityDto>>> GetAvailability(CancellationToken ct)
         {
             var availability = await _service.GetAvailabilityAsync(ct);
             return Ok(availability);
+        }
+
+        [HttpGet("bookings/{bookingId:int}/payment-status")]
+        public async Task<ActionResult> GetBookingPaymentStatus(int bookingId, CancellationToken ct)
+        {
+            var booking = await _db.BoardingBookings
+                .AsNoTracking()
+                .Include(b => b.Customer)
+                .FirstOrDefaultAsync(b => b.BookingId == bookingId, ct);
+
+            if (booking is null)
+                return NotFound(new { message = "Booking not found." });
+
+            // If booking is already confirmed/active/done, no need to check PayOS
+            if (booking.Status is "Đã thanh toán" or "Đang sử dụng" or "Đã trả phòng")
+                return Ok(new { bookingId, bookingStatus = booking.Status, paymentStatus = "already_processed" });
+
+            // Find the pending payment for this boarding booking
+            var payment = await _db.Payments
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p =>
+                    p.PaymentType == "boarding" &&
+                    p.ReferenceId == bookingId &&
+                    p.PaymentStatus == "pending", ct);
+
+            if (payment is null)
+                return Ok(new { bookingId, bookingStatus = booking.Status, paymentStatus = "no_pending_payment" });
+
+            if (payment.PayosOrderCode is null or 0)
+                return Ok(new { bookingId, bookingStatus = booking.Status, paymentStatus = "no_payos_payment" });
+
+            // Check actual PayOS status
+            var status = await _payOS.GetPaymentStatusAsync(payment.PayosOrderCode.Value, ct);
+            if (status is null)
+                return Ok(new { bookingId, bookingStatus = booking.Status, paymentStatus = "payos_unreachable", orderCode = payment.PayosOrderCode });
+
+            if (status.IsPaid)
+            {
+                // Update payment to paid
+                payment.PaymentStatus = "paid";
+                payment.PaidAt = DateTime.Now;
+                // Update booking status
+                booking.Status = "Đã thanh toán";
+                booking.UpdatedAt = DateTime.Now;
+                await _db.SaveChangesAsync(ct);
+
+                await _email.SendBoardingInvoiceEmailAsync(
+                    booking.Customer?.Email ?? "",
+                    booking.Customer?.Name ?? "Khach hang",
+                    $"BR-{booking.BookingId:D4}",
+                    booking.RoomType,
+                    booking.CheckInDate,
+                    booking.CheckOutDate,
+                    booking.BoardingDays,
+                    1,
+                    booking.SpecialNotes,
+                    booking.PricePerDay,
+                    booking.TotalPrice,
+                    "Thanh toán trực tuyến (PayOS)",
+                    "Đã thanh toán",
+                    ct);
+
+                return Ok(new
+                {
+                    bookingId,
+                    bookingStatus = "Đã thanh toán",
+                    paymentStatus = "paid",
+                    orderCode = payment.PayosOrderCode
+                });
+            }
+
+            return Ok(new
+            {
+                bookingId,
+                bookingStatus = booking.Status,
+                paymentStatus = status.Status ?? "unknown",
+                orderCode = payment.PayosOrderCode
+            });
+        }
+
+        [HttpGet("catalog")]
+        public async Task<ActionResult<BoardingCatalogDto>> GetCatalog(CancellationToken ct)
+        {
+            var catalog = await _service.GetCatalogAsync(ct);
+            return Ok(catalog);
         }
 
         [HttpPost("checkout")]
@@ -111,8 +204,9 @@ namespace PetShop.Controllers
                     PetInfo = $"Số thú cưng: {request.Pets}",
                     SpecialNotes = request.Notes,
                     EmergencyPhone1 = request.CustomerPhone ?? "",
-                    Status = request.PaymentMethod == "PayOS" ? BoardingStatusChoXacNhan : BoardingStatusDaThanhToan,
+                    Status = request.PaymentMethod == "PayOS" ? BoardingStatusChoXacNhan : BoardingStatusChoXacNhan,
                     TotalPrice = request.TotalPrice,
+                    PaymentMethod = request.PaymentMethod,
                     CreatedAt = DateTime.Now,
                     UpdatedAt = DateTime.Now
                 };

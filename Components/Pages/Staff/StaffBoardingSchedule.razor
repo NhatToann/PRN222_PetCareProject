@@ -1,0 +1,905 @@
+@page "/staff/boarding"
+@using PetShop.Models
+@inject IBoardingClient BoardingClient
+@inject UserSessionService UserSession
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Lịch đặt phòng - Staff</PageTitle>
+
+<div class="staff-boarding">
+    <header class="page-header">
+        <div class="header-row">
+            <div>
+                <h1>Lịch đặt phòng lưu trú</h1>
+                <p class="subtitle">Quản lý và xác nhận các booking từ khách hàng</p>
+            </div>
+            <div class="header-actions">
+                <button class="btn-refresh" @onclick="LoadBookings">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                        <path d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+                    </svg>
+                    Làm mới
+                </button>
+            </div>
+        </div>
+
+        <div class="stat-grid">
+            <div class="stat-card stat-pending">
+                <span class="stat-label">Chờ xác nhận</span>
+                <span class="stat-value">@CountByStatus("Chờ xác nhận")</span>
+            </div>
+            <div class="stat-card stat-confirmed">
+                <span class="stat-label">Đã thanh toán</span>
+                <span class="stat-value">@CountByStatus("Đã thanh toán")</span>
+            </div>
+            <div class="stat-card stat-active">
+                <span class="stat-label">Đang sử dụng</span>
+                <span class="stat-value">@CountByStatus("Đang sử dụng")</span>
+            </div>
+            <div class="stat-card stat-done">
+                <span class="stat-label">Đã trả phòng</span>
+                <span class="stat-value">@CountByStatus("Đã trả phòng")</span>
+            </div>
+        </div>
+
+        <div class="filter-row">
+            <div class="filter-tabs">
+                <button class="filter-tab @(ActiveFilter == "all" ? "active" : "")" @onclick='() => SetFilter("all")'>
+                    Tất cả <span class="tab-count">@Bookings.Count</span>
+                </button>
+                <button class="filter-tab @(ActiveFilter == "Chờ xác nhận" ? "active" : "")" @onclick='() => SetFilter("Chờ xác nhận")'>
+                    Chờ xác nhận <span class="tab-count pending">@CountByStatus("Chờ xác nhận")</span>
+                </button>
+                <button class="filter-tab @(ActiveFilter == "Đã thanh toán" ? "active" : "")" @onclick='() => SetFilter("Đã thanh toán")'>
+                    Đã thanh toán <span class="tab-count confirmed">@CountByStatus("Đã thanh toán")</span>
+                </button>
+                <button class="filter-tab @(ActiveFilter == "Chưa thanh toán" ? "active" : "")" @onclick='() => SetFilter("Chưa thanh toán")'>
+                    Chưa thanh toán <span class="tab-count pending">@CountByStatus("Chưa thanh toán")</span>
+                </button>
+                <button class="filter-tab @(ActiveFilter == "Đang sử dụng" ? "active" : "")" @onclick='() => SetFilter("Đang sử dụng")'>
+                    Đang sử dụng <span class="tab-count active-tab">@CountByStatus("Đang sử dụng")</span>
+                </button>
+                <button class="filter-tab @(ActiveFilter == "Đã trả phòng" ? "active" : "")" @onclick='() => SetFilter("Đã trả phòng")'>
+                    Đã trả phòng <span class="tab-count done">@CountByStatus("Đã trả phòng")</span>
+                </button>
+            </div>
+            <input class="search-input" placeholder="Tìm khách hàng / SĐT..."
+                   @bind="SearchTerm" @bind:event="oninput" />
+        </div>
+    </header>
+
+    @if (IsLoading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Đang tải lịch đặt phòng...</p>
+        </div>
+    }
+    else if (!FilteredBookings.Any())
+    {
+        <div class="empty-state">
+            <svg viewBox="0 0 24 24" width="64" height="64" fill="currentColor" opacity="0.4">
+                <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-2 .9-2 2v16c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 18H5V9h14v12zM5 7V5h14v2H5z"/>
+            </svg>
+            <h3>Không có booking nào @(ActiveFilter != "all" ? $"ở trạng thái \"{ActiveFilter}\"" : "")</h3>
+            <p>Các booking mới sẽ xuất hiện tại đây.</p>
+        </div>
+    }
+    else
+    {
+        <div class="bookings-grid">
+            @foreach (var booking in FilteredBookings)
+            {
+                <article class="booking-card @GetStatusClass(booking.Status)">
+                    <header class="card-head">
+                        <div class="card-id">
+                            <span class="id-label">Mã booking</span>
+                            <span class="id-value">#BR-@booking.BookingId.ToString("D4")</span>
+                        </div>
+                        <span class="status-badge">@booking.Status</span>
+                    </header>
+
+                    <div class="card-body">
+                        <div class="customer-block">
+                            <div class="customer-avatar">
+                                @(booking.Customer?.Name?.Trim().FirstOrDefault().ToString().ToUpper() ?? "?")
+                            </div>
+                            <div class="customer-info">
+                                <h4>@(booking.Customer?.Name ?? "Khách lẻ")</h4>
+                                <div class="contact-line">
+                                    <span>📧 @(booking.Customer?.Email ?? "—")</span>
+                                </div>
+                                <div class="contact-line">
+                                    <span>📞 @(booking.Customer?.Phone ?? booking.EmergencyPhone1 ?? "—")</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <span class="info-label">Loại phòng</span>
+                                <span class="info-value">@booking.RoomType</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Số ngày</span>
+                                <span class="info-value">@booking.BoardingDays ngày</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Thú cưng</span>
+                                <span class="info-value">@ExtractPetCount(booking.PetInfo) con</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Đơn giá</span>
+                                <span class="info-value">@booking.PricePerDay.ToString("N0")đ/ngày</span>
+                            </div>
+                        </div>
+
+                        <div class="date-range">
+                            <div class="date-block">
+                                <span class="date-label">Nhận phòng</span>
+                                <span class="date-value">@booking.CheckInDate.ToString("dd/MM/yyyy")</span>
+                                <span class="date-relative">@RelativeDate(booking.CheckInDate)</span>
+                            </div>
+                            <div class="date-arrow">→</div>
+                            <div class="date-block">
+                                <span class="date-label">Trả phòng</span>
+                                <span class="date-value">@booking.CheckOutDate.ToString("dd/MM/yyyy")</span>
+                                <span class="date-relative">@RelativeDate(booking.CheckOutDate)</span>
+                            </div>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(booking.SpecialNotes))
+                        {
+                            <div class="notes-block">
+                                <span class="notes-label">Ghi chú của khách:</span>
+                                <p>@booking.SpecialNotes</p>
+                            </div>
+                        }
+
+                        <div class="price-row">
+                            <span>Tổng tiền</span>
+                            <strong class="price-total">@booking.TotalPrice.ToString("N0")đ</strong>
+                        </div>
+                    </div>
+
+                    <footer class="card-actions">
+                        @if (booking.Status == "Chờ xác nhận")
+                        {
+                            <button class="btn-secondary" @onclick="() => OpenRejectDialog(booking)" disabled="@IsProcessing(booking.BookingId)">
+                                ✕ Từ chối
+                            </button>
+                            <button class="btn-primary" @onclick="() => ConfirmBooking(booking)" disabled="@IsProcessing(booking.BookingId)">
+                                @if (IsProcessing(booking.BookingId))
+                                {
+                                    <span class="dot-spin"></span>
+                                    <span>Đang xử lý...</span>
+                                }
+                                else
+                                {
+                                    <span>✓ Xác nhận đặt phòng</span>
+                                }
+                            </button>
+                        }
+                        else if (booking.Status == "Đã thanh toán")
+                        {
+                            <button class="btn-info" @onclick="() => CheckInGuest(booking)" disabled="@IsProcessing(booking.BookingId)">
+                                🏠 Check-in khách
+                            </button>
+                        }
+                        else if (booking.Status == "Đang sử dụng")
+                        {
+                            <button class="btn-success" @onclick="() => CheckOutGuest(booking)" disabled="@IsProcessing(booking.BookingId)">
+                                🔑 Check-out & hoàn tất
+                            </button>
+                        }
+                        else
+                        {
+                            <span class="readonly-text">Đã hoàn tất quy trình</span>
+                        }
+                    </footer>
+
+                    @if (ActionFeedback.TryGetValue(booking.BookingId, out var msg))
+                    {
+                        <div class="card-feedback @ActionFeedbackClass(booking.BookingId)">@msg</div>
+                    }
+                </article>
+            }
+        </div>
+    }
+</div>
+
+@if (ShowRejectDialog && RejectTarget != null)
+{
+    <div class="modal-backdrop" @onclick="CloseRejectDialog">
+        <div class="modal" @onclick:stopPropagation="true">
+            <h3>Từ chối booking</h3>
+            <p>Bạn đang từ chối booking <strong>#BR-@RejectTarget.BookingId.ToString("D4")</strong> của <strong>@RejectTarget.Customer?.Name</strong>.</p>
+            <label>Lý do từ chối <span class="required">*</span></label>
+            <textarea @bind="RejectReason" placeholder="VD: Phòng đã đầy trong khoảng thời gian này..."
+                      maxlength="200" rows="3"></textarea>
+            <div class="modal-actions">
+                <button class="btn-secondary" @onclick="CloseRejectDialog">Hủy</button>
+                <button class="btn-primary" @onclick="SubmitReject" disabled="@string.IsNullOrWhiteSpace(RejectReason)">
+                    Xác nhận từ chối
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .staff-boarding {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 1.5rem 1rem;
+        color: #2c3e50;
+    }
+
+    .debug-bar {
+        background: #1a1a2e;
+        color: #f1c40f;
+        padding: 0.5rem 0.75rem;
+        border-radius: 6px;
+        font-family: monospace;
+        font-size: 0.78rem;
+        margin-bottom: 1rem;
+        word-break: break-word;
+    }
+
+    .page-header { margin-bottom: 1.5rem; }
+    .header-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+    .header-row h1 {
+        font-size: 1.75rem;
+        margin: 0;
+        color: #2c3e50;
+    }
+    .subtitle { color: #888; font-size: 0.9rem; margin-top: 0.25rem; }
+
+    .btn-refresh {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.55rem 1rem;
+        background: white;
+        border: 1px solid #d4d8e3;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        color: #4a5568;
+        transition: all 0.2s;
+    }
+    .btn-refresh:hover { background: #f4f6fb; border-color: #667eea; color: #667eea; }
+
+    .stat-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 0.75rem;
+        margin: 1.25rem 0 1rem;
+    }
+    .stat-card {
+        background: white;
+        border-radius: 10px;
+        padding: 1rem 1.25rem;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        border-left: 4px solid #d8dde8;
+    }
+    .stat-label { color: #888; font-size: 0.85rem; }
+    .stat-value { font-size: 1.75rem; font-weight: 700; color: #2c3e50; }
+    .stat-pending { border-left-color: #f5a623; }
+    .stat-confirmed { border-left-color: #667eea; }
+    .stat-active { border-left-color: #2ecc71; }
+    .stat-done { border-left-color: #95a5a6; }
+
+    .filter-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-top: 1rem;
+    }
+    .filter-tabs { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    .filter-tab {
+        padding: 0.5rem 0.95rem;
+        background: white;
+        border: 1px solid #d4d8e3;
+        border-radius: 999px;
+        cursor: pointer;
+        font-size: 0.85rem;
+        color: #4a5568;
+        transition: all 0.15s;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+    .filter-tab:hover { border-color: #667eea; color: #667eea; }
+    .filter-tab.active {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-color: transparent;
+    }
+    .tab-count {
+        background: rgba(0,0,0,0.08);
+        padding: 0.05rem 0.5rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    .filter-tab.active .tab-count { background: rgba(255,255,255,0.25); }
+    .tab-count.pending { color: #d98824; }
+    .tab-count.confirmed { color: #4a5ec7; }
+    .tab-count.active-tab { color: #219653; }
+    .tab-count.done { color: #6c7a89; }
+
+    .search-input {
+        padding: 0.5rem 1rem;
+        border: 1px solid #d4d8e3;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        min-width: 240px;
+        outline: none;
+        transition: border-color 0.2s;
+    }
+    .search-input:focus { border-color: #667eea; }
+
+    .loading-state, .empty-state {
+        background: white;
+        border-radius: 12px;
+        padding: 4rem 2rem;
+        text-align: center;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .empty-state h3 { margin: 1rem 0 0.4rem; color: #4a5568; }
+    .empty-state p { color: #95a5a6; font-size: 0.95rem; }
+
+    .spinner {
+        width: 36px;
+        height: 36px;
+        border: 3px solid #e3e6ee;
+        border-top-color: #667eea;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 0.75rem;
+    }
+    @@keyframes spin { to { transform: rotate(360deg); } }
+
+    .bookings-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+        gap: 1rem;
+    }
+    .booking-card {
+        background: white;
+        border-radius: 14px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+        overflow: hidden;
+        border-top: 4px solid #d4d8e8;
+        transition: transform 0.15s, box-shadow 0.15s;
+        display: flex;
+        flex-direction: column;
+    }
+    .booking-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+    }
+    .booking-card.status-pending { border-top-color: #f5a623; }
+    .booking-card.status-confirmed { border-top-color: #667eea; }
+    .booking-card.status-active { border-top-color: #2ecc71; }
+    .booking-card.status-done { border-top-color: #95a5a6; }
+
+    .card-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 1.25rem;
+        background: #fafbfd;
+        border-bottom: 1px solid #eef0f6;
+    }
+    .card-id { display: flex; flex-direction: column; line-height: 1.15; }
+    .id-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: #95a5a6; }
+    .id-value { font-weight: 700; font-size: 1.05rem; color: #2c3e50; }
+
+    .status-badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 999px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        background: #eef0f8;
+        color: #4a5568;
+    }
+    .booking-card.status-pending .status-badge { background: #fff4e0; color: #b07014; }
+    .booking-card.status-confirmed .status-badge { background: #e8eaff; color: #4555b8; }
+    .booking-card.status-active .status-badge { background: #d8f5e3; color: #1e8449; }
+    .booking-card.status-done .status-badge { background: #ecf0f1; color: #6c7a89; }
+
+    .card-body {
+        padding: 1rem 1.25rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.85rem;
+        flex: 1;
+    }
+    .customer-block { display: flex; gap: 0.75rem; align-items: flex-start; }
+    .customer-avatar {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        flex-shrink: 0;
+    }
+    .customer-info { flex: 1; min-width: 0; }
+    .customer-info h4 { margin: 0 0 0.25rem; font-size: 1rem; color: #2c3e50; }
+    .contact-line { font-size: 0.82rem; color: #6c7a89; line-height: 1.4; word-break: break-word; }
+
+    .info-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem 1rem;
+        background: #fafbfd;
+        border-radius: 8px;
+        padding: 0.6rem 0.85rem;
+    }
+    .info-item { display: flex; flex-direction: column; line-height: 1.2; }
+    .info-label { font-size: 0.7rem; text-transform: uppercase; color: #95a5a6; letter-spacing: 0.04em; }
+    .info-value { font-size: 0.92rem; color: #2c3e50; font-weight: 500; }
+
+    .date-range {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        background: linear-gradient(135deg, #eef0fb 0%, #f6efff 100%);
+        border-radius: 10px;
+        padding: 0.85rem;
+    }
+    .date-block { display: flex; flex-direction: column; line-height: 1.15; flex: 1; }
+    .date-label { font-size: 0.7rem; text-transform: uppercase; color: #6c7a89; letter-spacing: 0.04em; }
+    .date-value { font-weight: 700; color: #2c3e50; font-size: 1.05rem; }
+    .date-relative { font-size: 0.75rem; color: #667eea; }
+    .date-arrow { color: #667eea; font-weight: 700; }
+
+    .notes-block {
+        background: #fff8e6;
+        border-left: 3px solid #f5a623;
+        padding: 0.6rem 0.85rem;
+        border-radius: 6px;
+        font-size: 0.85rem;
+    }
+    .notes-label { font-weight: 600; color: #b07014; font-size: 0.78rem; text-transform: uppercase; display: block; margin-bottom: 0.15rem; }
+    .notes-block p { margin: 0; color: #6b5a1e; }
+
+    .price-row {
+        display: flex;
+        justify-content: space-between;
+        padding-top: 0.5rem;
+        border-top: 1px dashed #e3e6ee;
+        font-size: 0.95rem;
+        color: #4a5568;
+    }
+    .price-total { color: #e74c3c; font-size: 1.1rem; }
+
+    .card-actions {
+        display: flex;
+        gap: 0.5rem;
+        padding: 0.85rem 1.25rem;
+        background: #fafbfd;
+        border-top: 1px solid #eef0f6;
+        align-items: center;
+        justify-content: flex-end;
+    }
+    .card-actions .btn-primary,
+    .card-actions .btn-secondary,
+    .card-actions .btn-info,
+    .card-actions .btn-success {
+        padding: 0.5rem 0.95rem;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        transition: opacity 0.15s, transform 0.1s;
+    }
+    .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+    .btn-info { background: #e8eaff; color: #4555b8; }
+    .btn-success { background: #d8f5e3; color: #1e8449; }
+    .btn-secondary { background: #ecf0f1; color: #6c7a89; }
+    .card-actions button:hover:not(:disabled) { transform: translateY(-1px); }
+    .card-actions button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .readonly-text { color: #95a5a6; font-style: italic; font-size: 0.85rem; }
+
+    .card-feedback {
+        padding: 0.5rem 1.25rem;
+        font-size: 0.85rem;
+        border-top: 1px solid #eef0f6;
+    }
+    .card-feedback.success { background: #d8f5e3; color: #1e8449; }
+    .card-feedback.error { background: #fde7e7; color: #c0392b; }
+
+    .dot-spin {
+        width: 12px; height: 12px;
+        border: 2px solid rgba(255,255,255,0.4);
+        border-top-color: white;
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+    }
+
+    .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        animation: spin-fade 0.2s ease-out;
+    }
+    @@keyframes spin-fade { from { opacity: 0; } to { opacity: 1; } }
+    .modal {
+        background: white;
+        border-radius: 14px;
+        padding: 1.5rem;
+        max-width: 480px;
+        width: 90%;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+    }
+    .modal h3 { margin: 0 0 0.75rem; font-size: 1.2rem; color: #2c3e50; }
+    .modal p { color: #4a5568; margin: 0 0 1rem; }
+    .modal label { display: block; font-weight: 600; margin-bottom: 0.4rem; color: #4a5568; }
+    .required { color: #e74c3c; }
+    .modal textarea {
+        width: 100%;
+        padding: 0.6rem;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-family: inherit;
+        font-size: 0.95rem;
+        resize: vertical;
+    }
+    .modal-actions {
+        display: flex;
+        gap: 0.5rem;
+        justify-content: flex-end;
+        margin-top: 1rem;
+    }
+    .modal-actions .btn-primary, .modal-actions .btn-secondary {
+        padding: 0.55rem 1.1rem;
+        border-radius: 8px;
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+        font-size: 0.9rem;
+    }
+    .modal-actions .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+    .modal-actions .btn-secondary { background: #ecf0f1; color: #6c7a89; }
+    .modal-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+</style>
+
+@implements IDisposable
+
+@code {
+    private List<BoardingBookingDto> Bookings { get; set; } = new();
+    private bool IsLoading { get; set; } = true;
+    private bool IsStaff { get; set; }
+    private string DebugInfo { get; set; } = "Initializing...";
+    private string ActiveFilter { get; set; } = "all";
+    private string SearchTerm { get; set; } = "";
+    private readonly HashSet<int> ProcessingIds = new();
+    private readonly Dictionary<int, (string Message, bool IsSuccess)> ActionFeedback = new();
+
+    private bool ShowRejectDialog { get; set; }
+    private BoardingBookingDto? RejectTarget { get; set; }
+    private string RejectReason { get; set; } = "";
+
+    private Timer? _refreshTimer;
+
+    private IEnumerable<BoardingBookingDto> FilteredBookings
+    {
+        get
+        {
+            var filtered = ActiveFilter == "all"
+                ? Bookings
+                : ActiveFilter == "Chưa thanh toán"
+                    ? Bookings.Where(b => b.Status == "Chờ xác nhận" && b.PaymentMethod == "cod")
+                    : Bookings.Where(b => b.Status == ActiveFilter);
+
+            if (!string.IsNullOrWhiteSpace(SearchTerm))
+            {
+                var term = SearchTerm.Trim();
+                filtered = filtered.Where(b =>
+                    (b.Customer?.Name?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                    (b.Customer?.Phone?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                    (b.Customer?.Email?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                    b.BookingId.ToString().Contains(term));
+            }
+
+            return filtered
+                .OrderBy(b => b.Status switch
+                {
+                    "Chờ xác nhận" => 0,
+                    "Đã thanh toán" => 1,
+                    "Đang sử dụng" => 2,
+                    "Đã trả phòng" => 3,
+                    _ => 4
+                })
+                .ThenByDescending(b => b.CreatedAt)
+                .ThenBy(b => b.CheckInDate);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.CompletedTask;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        try { await UserSession.LoadAsync(); }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[StaffBoardingSchedule] LoadAsync error: {ex.Message}");
+        }
+
+        DebugInfo = $"Session loaded: IsAuth={UserSession.IsAuthenticated}, " +
+                    $"User={(UserSession.CurrentUser?.Name ?? "null")}, " +
+                    $"Role={UserSession.CurrentUser?.Role ?? "null"}, " +
+                    $"Time={DateTime.Now:HH:mm:ss}";
+
+        if (!UserSession.IsAuthenticated)
+        {
+            Navigation.NavigateTo("/login", forceLoad: true);
+            return;
+        }
+
+        IsStaff = UserSession.CurrentUser?.Role?.ToLowerInvariant() == "staff";
+        if (!IsStaff)
+        {
+            DebugInfo += " | CẢNH BÁO: Bạn đang đăng nhập với role '" +
+                         (UserSession.CurrentUser?.Role ?? "?") +
+                         "', không phải staff. Vẫn xem được nhưng nên đăng nhập bằng tài khoản staff.";
+        }
+
+        await LoadBookings();
+
+        // Auto-refresh every 30 seconds so new bookings appear without manual reload
+        _refreshTimer = new Timer(async _ =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await LoadBookings();
+            });
+        }, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
+    }
+
+    public void Dispose()
+    {
+        _refreshTimer?.Dispose();
+    }
+
+    private async Task LoadBookings()
+    {
+        IsLoading = true;
+        try
+        {
+            var result = await BoardingClient.GetAllBookingsAsync();
+            if (result.IsSuccess && result.Data != null)
+            {
+                Bookings = result.Data.ToList();
+
+                // For any "Chờ xác nhận" booking, poll PayOS to sync real payment status.
+                // This is needed because PayOS webhooks may not be reachable from local/dev
+                // environments. Staff should always see the latest payment state.
+                var pendingBookings = Bookings.Where(b => b.Status == "Chờ xác nhận").ToList();
+                if (pendingBookings.Count > 0)
+                {
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    var paymentCheckTasks = pendingBookings
+                        .Select(b => BoardingClient.GetBookingPaymentStatusAsync(b.BookingId, cts.Token))
+                        .ToList();
+
+                    try { await Task.WhenAll(paymentCheckTasks); } catch (OperationCanceledException) { /* PayOS slow — skip */ }
+
+                    foreach (var task in paymentCheckTasks)
+                    {
+                        if (!task.IsCompletedSuccessfully) continue;
+                        var paymentResult = task.Result;
+                        if (paymentResult.IsSuccess && paymentResult.Data != null)
+                        {
+                            var booking = Bookings.FirstOrDefault(b => b.BookingId == paymentResult.Data.BookingId);
+                            if (booking != null && paymentResult.Data.BookingStatus == "Đã thanh toán")
+                            {
+                                var idx = Bookings.IndexOf(booking);
+                                Bookings[idx] = booking with { Status = "Đã thanh toán" };
+                            }
+                        }
+                    }
+                }
+            }
+            else
+            {
+                ActionFeedback.Clear();
+                ActionFeedback[-1] = (result.Error ?? "Không tải được danh sách booking.", false);
+            }
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private void SetFilter(string filter)
+    {
+        ActiveFilter = filter;
+    }
+
+    private int CountByStatus(string status)
+        => Bookings.Count(b => b.Status == status);
+
+    private static string GetStatusClass(string status) => status switch
+    {
+        "Chờ xác nhận" => "status-pending",
+        "Đã thanh toán" => "status-confirmed",
+        "Đang sử dụng" => "status-active",
+        "Đã trả phòng" => "status-done",
+        _ => ""
+    };
+
+    private static int ExtractPetCount(string? petInfo)
+    {
+        if (string.IsNullOrWhiteSpace(petInfo)) return 0;
+        var m = System.Text.RegularExpressions.Regex.Match(petInfo, @"\d+");
+        return m.Success ? int.Parse(m.Value) : 0;
+    }
+
+    private static string RelativeDate(DateOnly date)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var delta = date.DayNumber - today.DayNumber;
+        return delta switch
+        {
+            0 => "Hôm nay",
+            1 => "Ngày mai",
+            -1 => "Hôm qua",
+            > 0 => $"Còn {delta} ngày",
+            _ => $"Đã qua {-delta} ngày"
+        };
+    }
+
+    private bool IsProcessing(int id) => ProcessingIds.Contains(id);
+
+    private void SetFeedback(int id, string message, bool success)
+    {
+        ActionFeedback[id] = (message, success);
+    }
+
+    private string ActionFeedbackClass(int id)
+        => ActionFeedback.TryGetValue(id, out var f) && f.IsSuccess ? "success" : "error";
+
+    private async Task ConfirmBooking(BoardingBookingDto booking)
+    {
+        // "Chờ xác nhận" → "Đang sử dụng" via ConfirmCheckinAsync on the controller;
+        // OR for cleaner staff semantics, treat confirmation as approving the request.
+        // Since /checkin transitions to "Đang sử dụng" directly, we use that as confirmation.
+        ProcessingIds.Add(booking.BookingId);
+        try
+        {
+            var result = await BoardingClient.ConfirmCheckinAsync(booking.BookingId);
+            if (result.IsSuccess)
+            {
+                SetFeedback(booking.BookingId, "✓ Đã xác nhận booking thành công.", true);
+                await LoadBookings();
+            }
+            else
+            {
+                SetFeedback(booking.BookingId, $"✗ {result.Error ?? "Lỗi khi xác nhận."}", false);
+            }
+        }
+        finally
+        {
+            ProcessingIds.Remove(booking.BookingId);
+        }
+    }
+
+    private void OpenRejectDialog(BoardingBookingDto booking)
+    {
+        RejectTarget = booking;
+        RejectReason = "";
+        ShowRejectDialog = true;
+    }
+
+    private void CloseRejectDialog()
+    {
+        ShowRejectDialog = false;
+        RejectTarget = null;
+        RejectReason = "";
+    }
+
+    private async Task SubmitReject()
+    {
+        if (RejectTarget == null || string.IsNullOrWhiteSpace(RejectReason)) return;
+        var id = RejectTarget.BookingId;
+        ProcessingIds.Add(id);
+        try
+        {
+            var result = await BoardingClient.RejectBookingAsync(id, RejectReason.Trim());
+            if (result.IsSuccess)
+            {
+                SetFeedback(id, "✓ Đã từ chối booking.", true);
+                CloseRejectDialog();
+                await LoadBookings();
+            }
+            else
+            {
+                SetFeedback(id, $"✗ {result.Error ?? "Lỗi khi từ chối."}", false);
+            }
+        }
+        finally
+        {
+            ProcessingIds.Remove(id);
+        }
+    }
+
+    private async Task CheckInGuest(BoardingBookingDto booking)
+    {
+        ProcessingIds.Add(booking.BookingId);
+        try
+        {
+            var result = await BoardingClient.ConfirmCheckinAsync(booking.BookingId);
+            if (result.IsSuccess)
+            {
+                SetFeedback(booking.BookingId, "✓ Check-in thành công.", true);
+                await LoadBookings();
+            }
+            else
+            {
+                SetFeedback(booking.BookingId, $"✗ {result.Error ?? "Lỗi khi check-in."}", false);
+            }
+        }
+        finally
+        {
+            ProcessingIds.Remove(booking.BookingId);
+        }
+    }
+
+    private async Task CheckOutGuest(BoardingBookingDto booking)
+    {
+        ProcessingIds.Add(booking.BookingId);
+        try
+        {
+            var result = await BoardingClient.ConfirmCheckoutAsync(booking.BookingId);
+            if (result.IsSuccess)
+            {
+                SetFeedback(booking.BookingId, "✓ Check-out & hoàn tất booking.", true);
+                await LoadBookings();
+            }
+            else
+            {
+                SetFeedback(booking.BookingId, $"✗ {result.Error ?? "Lỗi khi check-out."}", false);
+            }
+        }
+        finally
+        {
+            ProcessingIds.Remove(booking.BookingId);
+        }
+    }
+}

@@ -4,7 +4,29 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!--
+      The .NET SDK automatically writes [assembly: AssemblyTitleAttribute(...)],
+      [assembly: AssemblyVersionAttribute(...)], etc. into obj\Debug\net8.0\
+      PetShop_PRN222.AssemblyInfo.cs. The ASP.NET Core Razor SDK ALSO writes
+      its own AssemblyInfo file in the same folder. With MSBuild SDK 10.0.301
+      the two writes can land in the same generated file, causing "CS0579:
+      Duplicate attribute" errors. Disabling SDK auto-generation works around
+      this and is safe because we don't actually need those attributes
+      (Blazor Server does not read AssemblyTitle etc. at runtime).
+      The .exe file produced by the SDK is intentionally disabled below so the
+      running app does not lock the project's bin folder during incremental
+      builds (see UseAppHost comment). Run via:
+          dotnet "bin\Debug\net8.0\PetShop_PRN222.dll"
+    -->
+    <UseAppHost>false</UseAppHost>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
   </PropertyGroup>
+
+  <!-- Lock-fix: UseAppHost=false means no PetShop_PRN222.exe is produced.
+       The app runs as:  dotnet bin\Debug\net8.0\PetShop_PRN222.dll
+       Rebuilding while the app is running is safe because the .dll is
+       NOT file-locked on disk (Windows lets you overwrite a running .dll;
+       only .exe gets memory-mapped and locked). This eliminates MSB303. -->
 
   <ItemGroup>
     <Compile Remove="PetShop (ASP WEB CORE API) (This is a template, do not edit here)\**\*.cs" />

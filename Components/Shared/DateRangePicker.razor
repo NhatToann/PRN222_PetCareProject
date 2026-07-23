@@ -1,0 +1,481 @@
+@using PetShop.Models
+
+<div class="dr-wrapper @(_open ? "open" : "")">
+    <button type="button" class="dr-trigger" @onclick="ToggleOpen" @onclick:stopPropagation="true">
+        <span class="dr-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+        </span>
+        <span class="dr-content">
+            <span class="dr-label">@Label</span>
+            <span class="dr-value">
+                @if (CheckIn.HasValue && CheckOut.HasValue)
+                {
+                    <strong>@CheckIn.Value.ToString("dd/MM/yyyy")</strong>
+                    <span class="dr-arrow">→</span>
+                    <strong>@CheckOut.Value.ToString("dd/MM/yyyy")</strong>
+                    <span class="dr-nights">· @Nights đêm</span>
+                }
+                else
+                {
+                    <span class="dr-placeholder">Chọn ngày nhận và trả phòng</span>
+                }
+            </span>
+        </span>
+        <span class="dr-caret" aria-hidden="true">▾</span>
+    </button>
+
+    @if (_open)
+    {
+        <div class="dr-popover" @onclick:stopPropagation="true">
+            <div class="dr-quick">
+                <button type="button" class="dr-chip" @onclick="() => ApplyQuick(1)">1 đêm</button>
+                <button type="button" class="dr-chip" @onclick="() => ApplyQuick(3)">3 đêm</button>
+                <button type="button" class="dr-chip" @onclick="() => ApplyQuick(7)">7 đêm</button>
+                <button type="button" class="dr-chip" @onclick="() => ApplyQuick(14)">14 đêm</button>
+            </div>
+
+            <div class="dr-months">
+                <div class="dr-month">
+                    <div class="dr-month-head">
+                        <button type="button" class="dr-nav" @onclick="PrevMonth" aria-label="Tháng trước">‹</button>
+                        <span class="dr-month-title">@_leftMonth.ToString("MMMM yyyy", _viCulture)</span>
+                    </div>
+                    @RenderMonth(_leftMonth)
+                </div>
+
+                <div class="dr-month">
+                    <div class="dr-month-head">
+                        <span class="dr-month-title">@_rightMonth.ToString("MMMM yyyy", _viCulture)</span>
+                        <button type="button" class="dr-nav" @onclick="NextMonth" aria-label="Tháng sau">›</button>
+                    </div>
+                    @RenderMonth(_rightMonth)
+                </div>
+            </div>
+
+            <div class="dr-footer">
+                <span class="dr-legend">
+                    <span class="dr-dot in-range"></span> Đang chọn
+                    <span class="dr-dot start"></span> Nhận phòng
+                    <span class="dr-dot end"></span> Trả phòng
+                </span>
+                <div class="dr-actions">
+                    <button type="button" class="dr-btn ghost" @onclick="Clear">Xóa</button>
+                    <button type="button" class="dr-btn primary" disabled="@(!CanApply)" @onclick="Apply">
+                        Áp dụng
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = "Ngày nhận – trả phòng";
+    [Parameter] public DateOnly MinDate { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+    [Parameter] public DateOnly MaxDate { get; set; } = DateOnly.FromDateTime(DateTime.Today.AddDays(90));
+    [Parameter] public DateOnly? CheckIn { get; set; }
+    [Parameter] public DateOnly? CheckOut { get; set; }
+    [Parameter] public EventCallback<DateOnly> CheckInChanged { get; set; }
+    [Parameter] public EventCallback<DateOnly> CheckOutChanged { get; set; }
+
+    private static readonly System.Globalization.CultureInfo _viCulture =
+        System.Globalization.CultureInfo.GetCultureInfo("vi-VN");
+
+    private static readonly string[] _dayHeaders = { "T2", "T3", "T4", "T5", "T6", "T7", "CN" };
+
+    private bool _open;
+    private DateOnly _leftMonth;
+    private DateOnly _rightMonth;
+    private DateOnly? _pendingStart;
+    private DateOnly? _pendingEnd;
+
+    private int Nights => CheckIn.HasValue && CheckOut.HasValue
+        ? Math.Max(1, CheckOut.Value.DayNumber - CheckIn.Value.DayNumber)
+        : 0;
+
+    private bool CanApply => _pendingStart.HasValue && _pendingEnd.HasValue
+        && _pendingEnd.Value > _pendingStart.Value;
+
+    protected override void OnInitialized()
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        _leftMonth = new DateOnly(today.Year, today.Month, 1);
+        _rightMonth = _leftMonth.AddMonths(1);
+        SyncPending();
+    }
+
+    protected override void OnParametersSet()
+    {
+        SyncPending();
+        if (CheckIn.HasValue)
+        {
+            var m = new DateOnly(CheckIn.Value.Year, CheckIn.Value.Month, 1);
+            _leftMonth = m;
+            _rightMonth = m.AddMonths(1);
+        }
+    }
+
+    private void SyncPending()
+    {
+        _pendingStart = CheckIn;
+        _pendingEnd = CheckOut;
+    }
+
+    private void ToggleOpen()
+    {
+        _open = !_open;
+        if (_open) SyncPending();
+    }
+
+    private void PrevMonth()
+    {
+        var minMonth = new DateOnly(MinDate.Year, MinDate.Month, 1);
+        var newLeft = _leftMonth.AddMonths(-1);
+        if (newLeft < minMonth) return;
+        _leftMonth = newLeft;
+        _rightMonth = _leftMonth.AddMonths(1);
+    }
+
+    private void NextMonth()
+    {
+        var maxMonth = new DateOnly(MaxDate.Year, MaxDate.Month, 1);
+        if (_leftMonth >= maxMonth) return;
+        _leftMonth = _leftMonth.AddMonths(1);
+        _rightMonth = _leftMonth.AddMonths(1);
+    }
+
+    private RenderFragment RenderMonth(DateOnly month) => builder =>
+    {
+        var firstOfMonth = new DateOnly(month.Year, month.Month, 1);
+        // Monday = 0 ... Sunday = 6
+        var firstWeekday = ((int)firstOfMonth.DayOfWeek + 6) % 7;
+        var daysInMonth = DateTime.DaysInMonth(month.Year, month.Month);
+
+        int seq = 0;
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "dr-grid");
+        builder.OpenElement(2, "div");
+        builder.AddAttribute(3, "class", "dr-row dr-head");
+        foreach (var d in _dayHeaders)
+        {
+            builder.OpenElement(seq + 4, "span");
+            builder.AddAttribute(seq + 5, "class", "dr-cell head");
+            builder.AddContent(seq + 6, d);
+            builder.CloseElement();
+            seq += 3;
+        }
+        builder.CloseElement();
+
+        builder.OpenElement(seq, "div");
+        builder.AddAttribute(seq + 1, "class", "dr-row");
+        seq += 2;
+
+        for (int i = 0; i < firstWeekday; i++)
+        {
+            builder.OpenElement(seq, "span");
+            builder.AddAttribute(seq + 1, "class", "dr-cell empty");
+            builder.CloseElement();
+            seq += 2;
+        }
+
+        for (int day = 1; day <= daysInMonth; day++)
+        {
+            var date = new DateOnly(month.Year, month.Month, day);
+            var disabled = date < MinDate || date > MaxDate;
+            var isStart = _pendingStart == date;
+            var isEnd = _pendingEnd == date;
+            var inRange = _pendingStart.HasValue && _pendingEnd.HasValue
+                && date > _pendingStart.Value && date < _pendingEnd.Value;
+
+            string cls = "dr-cell day";
+            if (disabled) cls += " disabled";
+            if (isStart) cls += " start";
+            if (isEnd) cls += " end";
+            if (inRange) cls += " in-range";
+            if (date == DateOnly.FromDateTime(DateTime.Today)) cls += " today";
+
+            var captured = date;
+            builder.OpenElement(seq, "button");
+            builder.AddAttribute(seq + 1, "type", "button");
+            builder.AddAttribute(seq + 2, "class", cls);
+            if (disabled) builder.AddAttribute(seq + 3, "disabled", true);
+            builder.AddAttribute(seq + 4, "onclick", EventCallback.Factory.Create(this, () => PickDay(captured)));
+            builder.AddContent(seq + 5, day.ToString());
+            builder.CloseElement();
+            seq += 6;
+
+            if ((firstWeekday + day) % 7 == 0 && day < daysInMonth)
+            {
+                builder.CloseElement();
+                builder.OpenElement(seq, "div");
+                builder.AddAttribute(seq + 1, "class", "dr-row");
+                seq += 2;
+            }
+        }
+
+        var trailing = (firstWeekday + daysInMonth) % 7;
+        if (trailing != 0)
+        {
+            for (int i = trailing; i < 7; i++)
+            {
+                builder.OpenElement(seq, "span");
+                builder.AddAttribute(seq + 1, "class", "dr-cell empty");
+                builder.CloseElement();
+                seq += 2;
+            }
+        }
+
+        builder.CloseElement(); // last row
+        builder.CloseElement(); // grid
+    };
+
+    private void PickDay(DateOnly date)
+    {
+        if (!_pendingStart.HasValue || (_pendingStart.HasValue && _pendingEnd.HasValue))
+        {
+            _pendingStart = date;
+            _pendingEnd = null;
+        }
+        else if (_pendingStart.HasValue && !_pendingEnd.HasValue)
+        {
+            if (date <= _pendingStart.Value)
+            {
+                _pendingStart = date;
+            }
+            else
+            {
+                _pendingEnd = date;
+            }
+        }
+    }
+
+    private void ApplyQuick(int nights)
+    {
+        var start = DateOnly.FromDateTime(DateTime.Today);
+        var end = start.AddDays(nights);
+        if (end > MaxDate) end = MaxDate;
+        _pendingStart = start;
+        _pendingEnd = end;
+    }
+
+    private void Clear()
+    {
+        _pendingStart = null;
+        _pendingEnd = null;
+    }
+
+    private async Task Apply()
+    {
+        if (!CanApply) return;
+        CheckIn = _pendingStart;
+        CheckOut = _pendingEnd;
+        await CheckInChanged.InvokeAsync(_pendingStart!.Value);
+        await CheckOutChanged.InvokeAsync(_pendingEnd!.Value);
+        _open = false;
+    }
+}
+
+<style>
+    .dr-wrapper {
+        position: relative;
+        width: 100%;
+    }
+
+    .dr-trigger {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background: #fff;
+        cursor: pointer;
+        font-size: 1rem;
+        text-align: left;
+        transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .dr-trigger:hover { border-color: #667eea; }
+    .dr-wrapper.open .dr-trigger {
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+    }
+
+    .dr-icon {
+        display: inline-flex;
+        color: #667eea;
+    }
+    .dr-icon svg { width: 22px; height: 22px; }
+
+    .dr-content { display: flex; flex-direction: column; flex: 1; line-height: 1.25; }
+    .dr-label { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 0.05em; }
+    .dr-value { font-size: 1rem; color: #2c3e50; }
+    .dr-placeholder { color: #aaa; font-style: italic; }
+    .dr-arrow { margin: 0 0.5rem; color: #888; }
+    .dr-nights { margin-left: 0.5rem; color: #667eea; font-size: 0.875rem; }
+    .dr-caret { color: #888; transition: transform 0.2s; }
+    .dr-wrapper.open .dr-caret { transform: rotate(180deg); }
+
+    .dr-popover {
+        position: absolute;
+        top: calc(100% + 8px);
+        left: 0;
+        z-index: 50;
+        background: #fff;
+        border-radius: 14px;
+        box-shadow: 0 14px 40px rgba(0, 0, 0, 0.18);
+        padding: 1rem 1rem 0.75rem;
+        width: min(680px, 95vw);
+        animation: drFade 0.15s ease-out;
+    }
+
+    @@keyframes drFade {
+        from { opacity: 0; transform: translateY(-6px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .dr-quick {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+        flex-wrap: wrap;
+    }
+    .dr-chip {
+        padding: 0.35rem 0.85rem;
+        background: #f4f6fb;
+        border: 1px solid #e3e6ee;
+        border-radius: 999px;
+        cursor: pointer;
+        font-size: 0.85rem;
+        color: #4a5568;
+        transition: all 0.15s;
+    }
+    .dr-chip:hover { background: #667eea; color: #fff; border-color: #667eea; }
+
+    .dr-months {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+    }
+    @@media (max-width: 640px) {
+        .dr-months { grid-template-columns: 1fr; }
+    }
+
+    .dr-month { display: flex; flex-direction: column; }
+    .dr-month-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.25rem 0.25rem 0.5rem;
+    }
+    .dr-month-title { font-weight: 600; color: #2c3e50; text-transform: capitalize; }
+    .dr-nav {
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 1.4rem;
+        color: #4a5568;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        transition: background 0.15s;
+    }
+    .dr-nav:hover { background: #f0f2f8; }
+
+    .dr-grid { display: flex; flex-direction: column; gap: 2px; }
+    .dr-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+    .dr-cell {
+        aspect-ratio: 1 / 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.875rem;
+        color: #2c3e50;
+        border-radius: 8px;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        font-family: inherit;
+        position: relative;
+        transition: background 0.15s, color 0.15s;
+    }
+    .dr-cell.head {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #9aa3b2;
+        cursor: default;
+        text-transform: uppercase;
+        aspect-ratio: auto;
+        padding: 0.25rem 0;
+    }
+    .dr-cell.empty { cursor: default; }
+    .dr-cell.day:hover:not(.disabled):not(.head):not(.empty) {
+        background: #eef0fb;
+    }
+    .dr-cell.disabled {
+        color: #cbd2dc;
+        cursor: not-allowed;
+        text-decoration: line-through;
+    }
+    .dr-cell.today {
+        font-weight: 700;
+        box-shadow: inset 0 0 0 1px #667eea;
+    }
+    .dr-cell.in-range {
+        background: #eef0fb;
+        color: #2c3e50;
+        border-radius: 0;
+    }
+    .dr-cell.start,
+    .dr-cell.end {
+        background: #667eea;
+        color: #fff;
+        font-weight: 600;
+    }
+    .dr-cell.start { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+    .dr-cell.end { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+
+    .dr-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+        padding-top: 0.75rem;
+        margin-top: 0.5rem;
+        border-top: 1px solid #eef0f6;
+    }
+    .dr-legend { font-size: 0.8rem; color: #4a5568; display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
+    .dr-dot {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 4px;
+        vertical-align: middle;
+    }
+    .dr-dot.in-range { background: #eef0fb; box-shadow: inset 0 0 0 1px #667eea; }
+    .dr-dot.start, .dr-dot.end { background: #667eea; }
+    .dr-actions { display: flex; gap: 0.5rem; }
+    .dr-btn {
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 500;
+        font-size: 0.9rem;
+        border: none;
+        transition: opacity 0.15s;
+    }
+    .dr-btn.ghost { background: transparent; color: #4a5568; }
+    .dr-btn.ghost:hover { background: #f0f2f8; }
+    .dr-btn.primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; }
+    .dr-btn.primary:hover:not(:disabled) { opacity: 0.92; }
+    .dr-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+</style>
